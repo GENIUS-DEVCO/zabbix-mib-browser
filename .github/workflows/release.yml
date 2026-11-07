@@ -1,0 +1,71 @@
+name: Release
+
+# Creates a Git tag and a GitHub release when the version in manifest.json changes on main.
+# Release notes are taken from the matching section of CHANGELOG.md.
+
+on:
+  push:
+    branches: [main]
+    paths: [manifest.json, CHANGELOG.md, .github/workflows/release.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version
+        id: version
+        run: |
+          version=$(php -r 'echo json_decode(file_get_contents("manifest.json"), true)["version"];')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git rev-parse "v$version" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run tests
+        if: steps.version.outputs.exists == 'false'
+        run: php tests/run.php
+
+      - name: Release notes from CHANGELOG.md
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          version='${{ steps.version.outputs.version }}'
+          awk -v v="$version" '
+            $0 ~ "^## "v" " { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          cat >> notes.md <<'EOF'
+
+          ### Installation / mise à jour
+
+          ```bash
+          # Installation
+          cd /usr/share/zabbix/ui/modules/
+          git clone https://github.com/GENIUS-DEVCO/zabbix-mib-browser.git mibbrowser
+          chown -R www-data:www-data mibbrowser/data
+
+          # Mise à jour
+          cd /usr/share/zabbix/ui/modules/mibbrowser && git pull
+          ```
+
+          Compatible Zabbix 8.0 (PHP 8.2 ou plus).
+          EOF
+          cat notes.md
+
+      - name: Create tag and release
+        if: steps.version.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version='${{ steps.version.outputs.version }}'
+          gh release create "v$version" --target "$GITHUB_SHA" --title "MIB Browser $version" --notes-file notes.md
