@@ -56,7 +56,15 @@ class Query extends BaseJson {
 		if ($result === null) {
 			$error = $snmp->getError();
 
-			if (strpos($error, 'secret:') === 0) {
+			if (strpos($error, 'policy:') === 0) {
+				$this->respond([
+					'error' => _s('Requête refusée : le module exige une interface SNMPv3 chiffrée (authPriv), or cette interface utilise %1$s. Configurez SNMPv3 authPriv sur l\'hôte, ou demandez à un Super admin de changer la politique dans l\'onglet « Sécurité SNMP ».',
+						substr($error, 7)
+					),
+					'security' => $snmp->getSecurity()
+				]);
+			}
+			elseif (strpos($error, 'secret:') === 0) {
 				$this->respond([
 					'error' => _('Les identifiants SNMP de cette interface utilisent des macros secrètes ou non résolues. Saisissez-les dans « Identifiants » pour cette requête.'),
 					'need_credentials' => explode(',', substr($error, 7))
@@ -110,6 +118,7 @@ class Query extends BaseJson {
 			'limited' => $total > count($rows),
 			'truncated' => $snmp->isTruncated(),
 			'duration' => $duration,
+			'security' => $snmp->getSecurity(),
 			'snmp_oid' => $operation.'['.$oid.']'
 		]);
 	}

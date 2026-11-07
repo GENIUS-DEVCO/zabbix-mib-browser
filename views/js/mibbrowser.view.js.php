@@ -27,7 +27,16 @@
 			compliance: 'G'
 		};
 
-		init({tokens, csrf_field, oid, is_super_admin, max_upload_size}) {
+		SECURITY_LABELS = {
+			encrypted: <?= json_encode(_('Chiffré')) ?>,
+			weak: <?= json_encode(_('Chiffré (algorithmes faibles)')) ?>,
+			auth_only: <?= json_encode(_('Authentifié, non chiffré')) ?>,
+			none: <?= json_encode(_('Non chiffré')) ?>
+		};
+
+		init({tokens, csrf_field, oid, is_super_admin, max_upload_size, is_https}) {
+			this.is_https = is_https;
+			this.policy = 'warn';
 			this.tokens = tokens;
 			this.csrf_field = csrf_field;
 			this.is_super_admin = is_super_admin;
@@ -180,12 +189,16 @@
 				tab.classList.toggle('mibb-tab-active', tab.dataset.tab === name);
 			});
 
-			for (const panel of ['results', 'details', 'mibs']) {
+			for (const panel of ['results', 'details', 'mibs', 'security']) {
 				this.$('mibb-panel-' + panel).style.display = panel === name ? '' : 'none';
 			}
 
 			if (name === 'mibs' && !this.mibs_loaded) {
 				this.loadMibs();
+			}
+
+			if (name === 'security') {
+				this.loadSecurity();
 			}
 		}
 
@@ -212,6 +225,14 @@
 				const panel = this.$('mibb-credentials');
 				panel.style.display = panel.style.display === 'none' ? '' : 'none';
 			});
+
+			if (!this.is_https && location.protocol !== 'https:') {
+				this.$('mibb-credentials-warning').append(this.el('div', {class: 'mibb-msg mibb-msg-warning',
+					text: <?= json_encode(_('Cette page n\'est pas servie en HTTPS : les identifiants saisis ici traversent le réseau en clair entre votre navigateur et Zabbix. Activez HTTPS sur l\'interface web avant de les utiliser.')) ?>
+				}));
+			}
+
+			this.$('mibb-interface').addEventListener('change', () => this.updateSecurityBadge());
 		}
 
 		async onHostChange() {
@@ -222,6 +243,7 @@
 			select.disabled = true;
 			this.host = null;
 			this.interfaces = [];
+			this.updateSecurityBadge();
 
 			if (!data.length) {
 				return;
@@ -238,6 +260,7 @@
 
 			this.host = result.host;
 			this.interfaces = result.interfaces;
+			this.policy = result.policy;
 
 			if (!result.interfaces.length) {
 				select.append(this.el('option', {value: '', text: <?= json_encode(_('Aucune interface SNMP')) ?>}));
@@ -245,11 +268,47 @@
 				return;
 			}
 
+			// Interfaces come sorted from the most secure one, which is selected by default.
 			for (const iface of result.interfaces) {
 				select.append(this.el('option', {value: iface.interfaceid, text: iface.label}));
 			}
 
 			select.disabled = false;
+			this.updateSecurityBadge();
+		}
+
+		currentInterface() {
+			const id = this.$('mibb-interface').value;
+
+			return this.interfaces.find((iface) => iface.interfaceid === id) ?? null;
+		}
+
+		securityBadge(security) {
+			return this.el('span', {
+				class: 'mibb-sec mibb-sec-' + security.level,
+				title: security.summary + (security.issues.length ? '\n' + security.issues.join('\n') : ''),
+				text: (security.encrypted ? '🔒 ' : '⚠ ') + this.SECURITY_LABELS[security.level]
+			});
+		}
+
+		updateSecurityBadge() {
+			const badge = this.$('mibb-security-badge');
+			const iface = this.currentInterface();
+
+			if (iface === null) {
+				badge.style.display = 'none';
+
+				return;
+			}
+
+			const security = iface.security;
+			const blocked = this.policy === 'require_encryption' && !security.encrypted;
+
+			badge.className = 'mibb-sec mibb-sec-' + security.level;
+			badge.textContent = (security.encrypted ? '🔒 ' : '⚠ ') + this.SECURITY_LABELS[security.level]
+				+ (blocked ? ' — ' + <?= json_encode(_('bloqué par la politique')) ?> : '');
+			badge.title = security.summary + (security.issues.length ? '\n' + security.issues.join('\n') : '');
+			badge.style.display = '';
 		}
 
 		credentials() {
@@ -359,6 +418,14 @@
 			);
 
 			panel.append(header);
+
+			if (result.security && result.security.level !== 'encrypted') {
+				panel.append(this.el('div', {class: 'mibb-msg ' + (result.security.encrypted ? 'mibb-msg-info' : 'mibb-msg-warning')},
+					this.securityBadge(result.security), ' ',
+					result.security.summary + ' — ' + result.security.issues.join(' ')
+						+ (result.security.encrypted ? '' : ' ' + <?= json_encode(_('Configurez SNMPv3 authPriv (SHA-256 / AES) sur cet équipement et sur l\'interface de l\'hôte.')) ?>)
+				));
+			}
 
 			if (result.limited) {
 				panel.append(this.el('div', {class: 'mibb-msg mibb-msg-warning',
@@ -865,6 +932,118 @@
 				)),
 				tbody
 			));
+		}
+
+		async loadSecurity() {
+			const panel = this.$('mibb-panel-security');
+			panel.innerHTML = '';
+			panel.append(this.el('div', {class: 'mibb-loading', text: '…'}));
+
+			const result = await this.request('mibbrowser.security');
+			panel.innerHTML = '';
+
+			if (result.error) {
+				this.message(panel, result.error);
+
+				return;
+			}
+
+			this.policy = result.policy;
+
+			const cards = this.el('div', {class: 'mibb-sec-cards'});
+
+			for (const level of ['encrypted', 'weak', 'auth_only', 'none']) {
+				cards.append(this.el('div', {class: 'mibb-sec-card mibb-sec-card-' + level},
+					this.el('div', {class: 'mibb-sec-count', text: result.counts[level]}),
+					this.el('div', {text: this.SECURITY_LABELS[level]})
+				));
+			}
+
+			panel.append(cards);
+
+			// Policy.
+			const policy = this.el('div', {class: 'mibb-policy'},
+				this.el('b', {text: <?= json_encode(_('Politique du module : ')) ?>})
+			);
+
+			if (result.can_edit) {
+				const select = this.el('select', {class: 'mibb-select', id: 'mibb-policy-select'},
+					this.el('option', {value: 'warn', text: <?= json_encode(_('Avertir pour les interfaces non chiffrées')) ?>}),
+					this.el('option', {value: 'require_encryption', text: <?= json_encode(_('Exiger SNMPv3 chiffré (authPriv)')) ?>})
+				);
+				const status = this.el('span', {class: 'mibb-policy-status'});
+
+				select.value = result.policy;
+				policy.append(select,
+					this.el('button', {type: 'button', text: <?= json_encode(_('Save')) ?>,
+						onclick: async () => {
+							const saved = await this.request('mibbrowser.settings', {snmp_security: select.value});
+
+							if (saved.error) {
+								this.message(status, saved.error);
+
+								return;
+							}
+
+							this.policy = saved.policy;
+							this.updateSecurityBadge();
+							status.innerHTML = '';
+							status.append(this.el('span', {class: 'mibb-ok-text', text: <?= json_encode(_('Enregistré.')) ?>}));
+						}
+					}),
+					status
+				);
+			}
+			else {
+				policy.append(this.el('span', {text: result.policy === 'require_encryption'
+					? <?= json_encode(_('SNMPv3 chiffré exigé')) ?>
+					: <?= json_encode(_('avertissement')) ?>
+				}));
+			}
+
+			policy.append(this.el('div', {class: 'mibb-hint',
+				text: <?= json_encode(_('« Exiger » refuse les requêtes Get/Walk du module sur les interfaces SNMPv1, SNMPv2c et SNMPv3 sans chiffrement. La collecte normale de Zabbix n\'est pas modifiée.')) ?>
+			}));
+
+			panel.append(policy);
+
+			if (!result.rows.length) {
+				panel.append(this.el('div', {class: 'mibb-empty', text: <?= json_encode(_('Aucune interface SNMP.')) ?>}));
+
+				return;
+			}
+
+			const tbody = this.el('tbody');
+
+			for (const row of result.rows) {
+				tbody.append(this.el('tr', {},
+					this.el('td', {}, this.securityBadge(row)),
+					this.el('td', {},
+						this.el('a', {href: 'zabbix.php?action=popup&popup=host.edit&hostid=' + encodeURIComponent(row.hostid),
+							target: '_blank', text: row.host
+						}),
+						row.enabled ? null : this.el('span', {class: 'mibb-unknown', text: ' (' + <?= json_encode(_('désactivé')) ?> + ')'})
+					),
+					this.el('td', {class: 'mibb-mono', text: row.address}),
+					this.el('td', {text: row.summary}),
+					this.el('td', {text: row.issues.join(' ')})
+				));
+			}
+
+			panel.append(this.el('table', {class: 'list-table'},
+				this.el('thead', {}, this.el('tr', {},
+					this.el('th', {text: <?= json_encode(_('Sécurité')) ?>}),
+					this.el('th', {text: <?= json_encode(_('Host')) ?>}),
+					this.el('th', {text: <?= json_encode(_('Interface')) ?>}),
+					this.el('th', {text: <?= json_encode(_('Configuration')) ?>}),
+					this.el('th', {text: <?= json_encode(_('À corriger')) ?>})
+				)),
+				tbody
+			));
+
+			if (result.limited) {
+				panel.append(this.el('div', {class: 'mibb-hint', text: <?= json_encode(_('Liste limitée aux 5000 premières interfaces.')) ?>}));
+			}
 		}
 
 		async uploadMibs(input, status) {

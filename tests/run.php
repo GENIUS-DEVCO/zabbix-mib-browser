@@ -12,7 +12,7 @@ if (!function_exists('_')) {
 
 $root = dirname(__DIR__);
 
-foreach (['MibParser', 'MibRepository', 'SnmpResult', 'ItemMapper', 'TemplateBuilder', 'YamlWriter'] as $class) {
+foreach (['MibParser', 'MibRepository', 'SnmpResult', 'ItemMapper', 'TemplateBuilder', 'YamlWriter', 'SnmpSecurity'] as $class) {
 	require $root.'/lib/'.$class.'.php';
 }
 
@@ -20,6 +20,7 @@ use Modules\MibBrowser\Lib\ItemMapper,
 	Modules\MibBrowser\Lib\MibParser,
 	Modules\MibBrowser\Lib\MibRepository,
 	Modules\MibBrowser\Lib\SnmpResult,
+	Modules\MibBrowser\Lib\SnmpSecurity,
 	Modules\MibBrowser\Lib\TemplateBuilder,
 	Modules\MibBrowser\Lib\YamlWriter;
 
@@ -268,6 +269,32 @@ check('template: ifTable prototypes', count($if['zabbix_export']['templates'][0]
 
 check('mapper: obsolete not pollable', ItemMapper::isPollable(['access' => 'read-only', 'status' => 'obsolete']), false);
 check('mapper: deprecated pollable', ItemMapper::isPollable(['access' => 'read-only', 'status' => 'deprecated']), true);
+
+/* SNMP security ------------------------------------------------------------- */
+
+$v2 = SnmpSecurity::assess(['version' => '2', 'community' => 'public']);
+check('security: v2c not encrypted', [$v2['level'], $v2['encrypted'], $v2['summary']], ['none', false, 'SNMPv2c']);
+check('security: v1', SnmpSecurity::assess(['version' => '1'])['level'], 'none');
+check('security: v3 noAuthNoPriv', SnmpSecurity::assess(['version' => '3', 'securitylevel' => '0'])['level'], 'none');
+check('security: v3 authNoPriv', SnmpSecurity::assess(['version' => '3', 'securitylevel' => '1', 'authprotocol' => '3']),
+	['level' => 'auth_only', 'encrypted' => false, 'summary' => 'SNMPv3 authNoPriv (SHA256)',
+		'issues' => ['Authentifié mais non chiffré (authNoPriv) : les valeurs circulent en clair.']]
+);
+$strong = SnmpSecurity::assess(['version' => '3', 'securitylevel' => '2', 'authprotocol' => '3', 'privprotocol' => '3']);
+check('security: v3 authPriv SHA256/AES256', [$strong['level'], $strong['encrypted'], $strong['summary'], $strong['issues']],
+	['encrypted', true, 'SNMPv3 authPriv (SHA256/AES256)', []]
+);
+$weak = SnmpSecurity::assess(['version' => '3', 'securitylevel' => '2', 'authprotocol' => '0', 'privprotocol' => '0']);
+check('security: MD5/DES is weak', [$weak['level'], $weak['encrypted'], count($weak['issues'])], ['weak', true, 2]);
+check('security: SHA1/AES128 is weak', SnmpSecurity::assess(['version' => '3', 'securitylevel' => '2',
+	'authprotocol' => '1', 'privprotocol' => '1'])['level'], 'weak'
+);
+check('security: policy warn allows all', SnmpSecurity::isAllowed('none', 'warn'), true);
+check('security: policy require blocks clear text', [SnmpSecurity::isAllowed('none', 'require_encryption'),
+	SnmpSecurity::isAllowed('auth_only', 'require_encryption'), SnmpSecurity::isAllowed('weak', 'require_encryption'),
+	SnmpSecurity::isAllowed('encrypted', 'require_encryption')
+], [false, false, true, true]);
+check('security: unknown policy falls back to warn', SnmpSecurity::normalizePolicy('whatever'), 'warn');
 
 /* YAML ------------------------------------------------------------------------ */
 

@@ -23,6 +23,7 @@ class ZabbixSnmp {
 
 	private string $error = '';
 	private bool $truncated = false;
+	private ?array $security = null;
 
 	public function getError(): string {
 		return $this->error;
@@ -30,6 +31,20 @@ class ZabbixSnmp {
 
 	public function isTruncated(): bool {
 		return $this->truncated;
+	}
+
+	/**
+	 * Security assessment of the interface used by the last request.
+	 */
+	public function getSecurity(): ?array {
+		return $this->security;
+	}
+
+	/**
+	 * Module policy: "warn" (default) or "require_encryption" (only SNMPv3 authPriv interfaces can be queried).
+	 */
+	public static function policy(): string {
+		return SnmpSecurity::normalizePolicy(Storage::option('snmp_security', 'warn'));
 	}
 
 	/**
@@ -45,17 +60,22 @@ class ZabbixSnmp {
 		$result = [];
 
 		foreach ($interfaces as $interface) {
-			$version = (int) $interface['details']['version'];
+			$security = SnmpSecurity::assess($interface['details']);
 			$result[] = [
 				'interfaceid' => $interface['interfaceid'],
 				'main' => (int) $interface['main'],
 				'label' => ($interface['useip'] == INTERFACE_USE_IP ? $interface['ip'] : $interface['dns'])
-					.':'.$interface['port'].' (SNMPv'.($version == SNMP_V2C ? '2c' : $version).')',
-				'version' => $version
+					.':'.$interface['port'].' — '.$security['summary'],
+				'version' => (int) $interface['details']['version'],
+				'security' => $security
 			];
 		}
 
-		usort($result, static fn($a, $b) => $b['main'] <=> $a['main']);
+		// Most secure interface first (SNMPv3 authPriv), then the main interface.
+		usort($result, static fn($a, $b) =>
+			[SnmpSecurity::RANK[$a['security']['level']], -$a['main']]
+				<=> [SnmpSecurity::RANK[$b['security']['level']], -$b['main']]
+		);
 
 		return $result;
 	}
@@ -78,6 +98,7 @@ class ZabbixSnmp {
 
 		$this->error = '';
 		$this->truncated = false;
+		$this->security = null;
 
 		$hosts = API::Host()->get([
 			'output' => ['hostid', 'host', 'status', 'monitored_by', 'proxyid', 'assigned_proxyid', 'proxy_groupid'],
@@ -101,6 +122,14 @@ class ZabbixSnmp {
 
 		if (!$interfaces) {
 			$this->error = _('Cet hôte n\'a pas d\'interface SNMP.');
+
+			return null;
+		}
+
+		$this->security = SnmpSecurity::assess($interfaces[0]['details']);
+
+		if (!SnmpSecurity::isAllowed($this->security['level'], self::policy())) {
+			$this->error = 'policy:'.$this->security['summary'];
 
 			return null;
 		}

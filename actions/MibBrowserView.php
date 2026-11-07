@@ -37,7 +37,7 @@ class MibBrowserView extends CController {
 
 		foreach (['mibbrowser.tree', 'mibbrowser.node', 'mibbrowser.interfaces', 'mibbrowser.query',
 				'mibbrowser.mibs', 'mibbrowser.mib.upload', 'mibbrowser.mib.delete', 'mibbrowser.item.create',
-				'mibbrowser.template.generate'] as $action) {
+				'mibbrowser.template.generate', 'mibbrowser.security', 'mibbrowser.settings'] as $action) {
 			$tokens[$action] = CCsrfTokenHelper::get($action);
 		}
 
@@ -60,11 +60,20 @@ class MibBrowserView extends CController {
 			'oid' => $this->getInput('oid', ''),
 			'storage_problems' => $problems,
 			'is_super_admin' => CWebUser::getType() == USER_TYPE_SUPER_ADMIN,
-			'max_upload_size' => (int) Storage::option('max_upload_size', 5242880)
+			'max_upload_size' => (int) Storage::option('max_upload_size', 5242880),
+			'is_https' => self::isHttps()
 		];
 
 		$response = new CControllerResponseData($data);
 		$response->setTitle(_('MIB browser'));
 		$this->setResponse($response);
+	}
+
+	/**
+	 * Whether the page is served over HTTPS (directly or behind a TLS reverse proxy).
+	 */
+	private static function isHttps(): bool {
+		return (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off')
+			|| strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
 	}
 }

@@ -41,7 +41,8 @@ class Interfaces extends BaseJson {
 
 		$this->respond([
 			'host' => ['hostid' => $host['hostid'], 'name' => $host['name'], 'proxy' => $proxy],
-			'interfaces' => ZabbixSnmp::getInterfaces($host['hostid'])
+			'interfaces' => ZabbixSnmp::getInterfaces($host['hostid']),
+			'policy' => ZabbixSnmp::policy()
 		]);
 	}
 }

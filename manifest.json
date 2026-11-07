@@ -48,6 +48,14 @@
 		"mibbrowser.template.generate": {
 			"class": "TemplateGenerate",
 			"layout": "layout.json"
+		},
+		"mibbrowser.security": {
+			"class": "Security",
+			"layout": "layout.json"
+		},
+		"mibbrowser.settings": {
+			"class": "Settings",
+			"layout": "layout.json"
 		}
 	},
 	"assets": {
@@ -57,6 +65,7 @@
 	"config": {
 		"data_dir": "",
 		"max_upload_size": 5242880,
-		"max_results": 5000
+		"max_results": 5000,
+		"snmp_security": "warn"
 	}
 }

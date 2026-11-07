@@ -38,10 +38,13 @@ $query_form = (new CForm())
 			]))->addClass('mibb-field'),
 			(new CDiv([
 				new CLabel(_('Interface SNMP'), 'mibb-interface'),
-				(new CTag('select', true))
-					->setId('mibb-interface')
-					->addClass('mibb-select')
-					->setAttribute('disabled', 'disabled')
+				(new CDiv([
+					(new CTag('select', true))
+						->setId('mibb-interface')
+						->addClass('mibb-select')
+						->setAttribute('disabled', 'disabled'),
+					(new CSpan())->setId('mibb-security-badge')->addClass('mibb-sec')->addStyle('display: none')
+				]))->addClass('mibb-interface-row')
 			]))->addClass('mibb-field'),
 			(new CDiv([
 				new CLabel(_('OID ou nom'), 'mibb-oid'),
@@ -64,6 +67,7 @@ $query_form = (new CForm())
 		(new CDiv([
 			(new CDiv(_('Facultatif : à utiliser seulement si l\'interface utilise des macros secrètes. Les valeurs ne sont pas enregistrées.')))
 				->addClass('mibb-hint'),
+			(new CDiv())->setId('mibb-credentials-warning')->addClass('mibb-hint-block'),
 			(new CDiv([
 				new CLabel(_('Communauté'), 'mibb-cred-community'),
 				(new CTextBox('community'))->setId('mibb-cred-community')->setAttribute('type', 'password')
@@ -111,6 +115,8 @@ $tabs = (new CDiv([
 	(new CTag('button', true, _('Détails')))->setAttribute('type', 'button')->setAttribute('data-tab', 'details')
 		->addClass('mibb-tab'),
 	(new CTag('button', true, _('MIB chargées')))->setAttribute('type', 'button')->setAttribute('data-tab', 'mibs')
+		->addClass('mibb-tab'),
+	(new CTag('button', true, _('Sécurité SNMP')))->setAttribute('type', 'button')->setAttribute('data-tab', 'security')
 		->addClass('mibb-tab')
 ]))->addClass('mibb-tabs');
 
@@ -123,7 +129,8 @@ $main_panel = (new CDiv([
 	(new CDiv(
 		(new CDiv(_('Sélectionnez un objet dans l\'arbre MIB.')))->addClass('mibb-empty')
 	))->setId('mibb-panel-details')->addClass('mibb-panel')->addStyle('display: none'),
-	(new CDiv())->setId('mibb-panel-mibs')->addClass('mibb-panel')->addStyle('display: none')
+	(new CDiv())->setId('mibb-panel-mibs')->addClass('mibb-panel')->addStyle('display: none'),
+	(new CDiv())->setId('mibb-panel-security')->addClass('mibb-panel')->addStyle('display: none')
 ]))->addClass('mibb-main');
 
 // Item creation dialog (static markup, filled by JS).
@@ -293,7 +300,8 @@ if ($data['storage_problems']) {
 		'csrf_field' => CSRF_TOKEN_NAME,
 		'oid' => $data['oid'],
 		'is_super_admin' => $data['is_super_admin'],
-		'max_upload_size' => $data['max_upload_size']
+		'max_upload_size' => $data['max_upload_size'],
+		'is_https' => $data['is_https']
 	]).');
 '))
 	->setOnDocumentReady()

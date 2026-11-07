@@ -21,6 +21,7 @@ Le module ajoute un écran **Data collection → MIB browser** qui permet :
 | **Identifiants** | Ceux de l'interface SNMP de l'hôte, macros utilisateur résolues. Si l'interface utilise une **macro secrète**, le module demande la valeur pour la requête (elle n'est jamais enregistrée). |
 | **Création d'élément** | Élément SNMP `get[OID]` avec type d'information, unités, prétraitement (« Change per second » pour les compteurs, multiplicateur pour les TimeTicks) et **table de correspondance** créée depuis l'énumération MIB. |
 | **Génération de modèle** | Même approche que les modèles officiels Zabbix 8.0 : `get[]` pour les scalaires ; pour chaque table un élément maître `walk[]`, une **découverte LLD** dépendante (« SNMP walk to JSON ») et des **prototypes** dépendants (« SNMP walk value »). UUID stables : réimporter met à jour le même modèle. |
+| **Sécurité SNMP** | L'interface **SNMPv3 chiffrée (authPriv)** est choisie par défaut ; un badge indique le niveau de sécurité de l'interface utilisée ; les requêtes en clair (SNMPv1/v2c, SNMPv3 sans chiffrement) sont signalées ; un onglet dresse l'état de tous les hôtes SNMP ; une politique peut **exiger le chiffrement**. |
 | **Gestion des MIB** | Ajout de fichiers par un Super administrateur, détection des **dépendances manquantes**, suppression des MIB ajoutées. |
 
 | Détails d'un objet | Création d'un élément |
@@ -30,6 +31,8 @@ Le module ajoute un écran **Data collection → MIB browser** qui permet :
 | Génération de modèle | MIB chargées |
 |---|---|
 | ![Modèle](docs/screenshots/04-template.png) | ![MIB](docs/screenshots/05-mibs.png) |
+
+![Sécurité SNMP](docs/screenshots/06-security.png)
 
 ## Prérequis
 
@@ -84,6 +87,35 @@ location ~ ^/modules/mibbrowser/data/ {
 4. Dans les résultats, **+ Élément** crée un élément pour l'instance choisie ; **Générer un modèle** crée un modèle pour le sous-arbre interrogé.
 5. Onglet **MIB chargées** : ajouter des fichiers MIB constructeurs. Si une MIB dépend d'autres modules (par exemple `CISCO-SMI`, `CISCO-TC`), la colonne « État » les indique : il suffit de les ajouter aussi, la résolution se fait automatiquement.
 
+## Sécurité SNMP et chiffrement
+
+SNMPv1 et SNMPv2c envoient la communauté et toutes les valeurs **en clair** sur le réseau. Seul **SNMPv3 avec le niveau `authPriv`** chiffre les échanges. Le module en tient compte :
+
+| Niveau | Configuration | Affichage |
+|---|---|---|
+| 🔒 **Chiffré** | SNMPv3 authPriv avec SHA-224/256/384/512 et AES | badge vert |
+| 🔒 **Chiffré, algorithmes faibles** | SNMPv3 authPriv avec MD5, SHA-1 ou DES | badge orange, algorithme à remplacer indiqué |
+| ⚠ **Authentifié, non chiffré** | SNMPv3 authNoPriv | badge orange |
+| ⚠ **Non chiffré** | SNMPv1, SNMPv2c, SNMPv3 noAuthNoPriv | badge rouge |
+
+- Quand un hôte a plusieurs interfaces SNMP, **la plus sûre est sélectionnée par défaut**.
+- Les résultats d'une requête non chiffrée affichent un avertissement.
+- L'onglet **Sécurité SNMP** liste toutes les interfaces SNMP visibles par l'utilisateur, des moins sûres aux plus sûres, avec ce qu'il faut corriger et un lien vers l'hôte.
+- **Politique** (Super admin, dans l'onglet Sécurité SNMP) :
+  - *Avertir* (par défaut) : toutes les requêtes sont possibles, les accès en clair sont signalés ;
+  - *Exiger SNMPv3 chiffré* : le module refuse les Get/Walk sur les interfaces non chiffrées. La collecte normale de Zabbix n'est pas modifiée.
+- Les identifiants saisis dans « Identifiants » transitent entre le navigateur et Zabbix : le module avertit si la page n'est pas servie en **HTTPS**.
+
+Exemple de configuration SNMPv3 chiffrée sur un équipement Linux (Net-SNMP), à reporter ensuite sur l'interface SNMP de l'hôte dans Zabbix (version SNMPv3, niveau `authPriv`, SHA256, AES256) :
+
+```
+# /etc/snmp/snmpd.conf
+createUser zabbix SHA-256 "<phrase-auth>" AES256 "<phrase-chiffrement>"
+rouser zabbix priv
+```
+
+Stockez de préférence les phrases secrètes dans des **macros secrètes** (`{$SNMPV3_AUTHPASS}`, `{$SNMPV3_PRIVPASS}`) : le module ne peut pas les lire et vous demandera de les saisir pour une requête ponctuelle, sans les enregistrer.
+
 ## Configuration
 
 Les options se trouvent dans `manifest.json`, section `config` :
@@ -93,6 +125,9 @@ Les options se trouvent dans `manifest.json`, section `config` :
 | `data_dir` | `""` (= `<module>/data`) | Dossier des MIB ajoutées et du cache, accessible en écriture par le serveur web. |
 | `max_upload_size` | `5242880` | Taille maximale d'un fichier MIB (octets). |
 | `max_results` | `5000` | Nombre maximal de lignes affichées pour un walk. |
+| `snmp_security` | `warn` | `warn` ou `require_encryption`. Se règle depuis l'onglet **Sécurité SNMP**. |
+
+Zabbix copie ces options dans sa base de données lors de l'activation du module : modifier `manifest.json` ensuite n'a pas d'effet. La politique de sécurité se change dans l'onglet Sécurité SNMP ; pour les autres options, utilisez l'API (`module.update`) ou réactivez le module après l'avoir supprimé de la liste des modules.
 
 Le délai d'une requête SNMP est celui défini dans Zabbix pour les agents SNMP (réglage global ou du proxy). Pour les très grands sous-arbres, faites un walk sur une partie plus petite : le serveur Zabbix tronque les réponses trop volumineuses et le module le signale.
 
@@ -107,6 +142,7 @@ Navigateur ──► Module (PHP, interface Zabbix) ──► Serveur Zabbix ─
 - `lib/MibParser.php` : analyse SMIv1/SMIv2 tolérante (modules, imports, OBJECT-TYPE, TEXTUAL-CONVENTION, TRAP-TYPE…).
 - `lib/MibRepository.php` : résolution des OID entre modules, arbre, recherche, traduction des OID numériques, cache.
 - `lib/ZabbixSnmp.php` : requêtes via le serveur Zabbix, résolution des macros des identifiants, choix du proxy.
+- `lib/SnmpSecurity.php` : niveau de sécurité des interfaces (chiffrement SNMPv3, algorithmes) et politique.
 - `lib/ItemMapper.php`, `lib/TemplateBuilder.php`, `lib/YamlWriter.php` : correspondance MIB → éléments et génération des modèles.
 
 ## MIB fournies
