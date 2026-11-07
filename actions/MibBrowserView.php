@@ -37,7 +37,7 @@ class MibBrowserView extends CController {
 
 		foreach (['mibbrowser.tree', 'mibbrowser.node', 'mibbrowser.interfaces', 'mibbrowser.query',
 				'mibbrowser.mibs', 'mibbrowser.mib.upload', 'mibbrowser.mib.delete', 'mibbrowser.item.create',
-				'mibbrowser.template.generate', 'mibbrowser.security', 'mibbrowser.settings'] as $action) {
+				'mibbrowser.template.generate', 'mibbrowser.security', 'mibbrowser.settings', 'mibbrowser.test'] as $action) {
 			$tokens[$action] = CCsrfTokenHelper::get($action);
 		}
 

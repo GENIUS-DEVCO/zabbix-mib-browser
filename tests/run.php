@@ -10,13 +10,19 @@ if (!function_exists('_')) {
 	}
 }
 
+// Zabbix translation helper with sprintf-style positional arguments.
+function _s($format, ...$args) {
+	return vsprintf($format, $args);
+}
+
 $root = dirname(__DIR__);
 
-foreach (['MibParser', 'MibRepository', 'SnmpResult', 'ItemMapper', 'TemplateBuilder', 'YamlWriter', 'SnmpSecurity'] as $class) {
+foreach (['MibParser', 'MibRepository', 'SnmpResult', 'ItemMapper', 'TemplateBuilder', 'YamlWriter', 'SnmpSecurity', 'ConnectionDiagnosis'] as $class) {
 	require $root.'/lib/'.$class.'.php';
 }
 
-use Modules\MibBrowser\Lib\ItemMapper,
+use Modules\MibBrowser\Lib\ConnectionDiagnosis,
+	Modules\MibBrowser\Lib\ItemMapper,
 	Modules\MibBrowser\Lib\MibParser,
 	Modules\MibBrowser\Lib\MibRepository,
 	Modules\MibBrowser\Lib\SnmpResult,
@@ -295,6 +301,38 @@ check('security: policy require blocks clear text', [SnmpSecurity::isAllowed('no
 	SnmpSecurity::isAllowed('encrypted', 'require_encryption')
 ], [false, false, true, true]);
 check('security: unknown policy falls back to warn', SnmpSecurity::normalizePolicy('whatever'), 'warn');
+
+/* Connection diagnosis (messages captured from Zabbix 8.0 server) --------------- */
+
+$cases = [
+	["cannot retrieve OID: '.1.3.6.1.2.1.1.3.0' from [[127.0.0.1]:161]: timed out", 2, 'timeout'],
+	["cannot resolve address [[nonexistent.invalid]:161]: timed out: nodename nor servname provided, or not known", 2, 'dns'],
+	['Cannot connect to "127.0.0.1:161": Unknown user name.', 3, 'v3_user'],
+	['Cannot connect to "127.0.0.1:161": Authentication failure (incorrect password, community or key).', 3, 'v3_auth'],
+	["Probe successful, cannot retrieve OID: '.1.3.6.1.2.1.1.3.0' from [[127.0.0.1]:161]: timed out", 3, 'v3_priv'],
+	['Cannot connect to "127.0.0.1:161": Unsupported security level.', 3, 'v3_level'],
+	["Connection to Zabbix server \"127.0.0.1:10051\" refused. Possible reasons:", 2, 'server'],
+	['policy:SNMPv2c', 2, 'policy'],
+	['secret:community', 2, 'secret'],
+	['No Such Object available on this agent at this OID', 2, 'view'],
+	['Failed to validate host permissions.', 2, 'sync'],
+	['something unexpected', 2, 'unknown']
+];
+
+foreach ($cases as [$error, $version, $category]) {
+	check('diagnosis: '.$category, ConnectionDiagnosis::diagnose($error, $version)['category'], $category);
+}
+
+ok('diagnosis: v2c timeout mentions community first',
+	strpos(ConnectionDiagnosis::diagnose('... timed out', 2)['causes'][0], 'Communauté') === 0
+);
+ok('diagnosis: v3 timeout does not blame community',
+	strpos(implode(' ', ConnectionDiagnosis::diagnose('... timed out', 3)['causes']), 'Communauté') === false
+);
+ok('diagnosis: proxy wording', strpos(ConnectionDiagnosis::diagnose('... timed out', 2, true)['causes'][1], 'le proxy') !== false);
+check('vendor: Cisco', ConnectionDiagnosis::vendor('.1.3.6.1.4.1.9.1.1208'), ['enterprise' => 9, 'vendor' => 'Cisco']);
+check('vendor: unknown enterprise', ConnectionDiagnosis::vendor('1.3.6.1.4.1.999999.1'), ['enterprise' => 999999, 'vendor' => null]);
+check('vendor: not an enterprise OID', ConnectionDiagnosis::vendor('1.3.6.1.2.1.1'), null);
 
 /* YAML ------------------------------------------------------------------------ */
 

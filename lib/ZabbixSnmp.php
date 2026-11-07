@@ -24,6 +24,8 @@ class ZabbixSnmp {
 	private string $error = '';
 	private bool $truncated = false;
 	private ?array $security = null;
+	private int $version = 2;
+	private string $proxyid = '0';
 
 	public function getError(): string {
 		return $this->error;
@@ -38,6 +40,20 @@ class ZabbixSnmp {
 	 */
 	public function getSecurity(): ?array {
 		return $this->security;
+	}
+
+	/**
+	 * SNMP version of the interface used by the last request.
+	 */
+	public function getVersion(): int {
+		return $this->version;
+	}
+
+	/**
+	 * Proxy used by the last request ('0' when polled by the server).
+	 */
+	public function getProxyId(): string {
+		return $this->proxyid;
 	}
 
 	/**
@@ -99,6 +115,7 @@ class ZabbixSnmp {
 		$this->error = '';
 		$this->truncated = false;
 		$this->security = null;
+		$this->proxyid = '0';
 
 		$hosts = API::Host()->get([
 			'output' => ['hostid', 'host', 'status', 'monitored_by', 'proxyid', 'assigned_proxyid', 'proxy_groupid'],
@@ -127,6 +144,7 @@ class ZabbixSnmp {
 		}
 
 		$this->security = SnmpSecurity::assess($interfaces[0]['details']);
+		$this->version = (int) $interfaces[0]['details']['version'];
 
 		if (!SnmpSecurity::isAllowed($this->security['level'], self::policy())) {
 			$this->error = 'policy:'.$this->security['summary'];
@@ -148,6 +166,8 @@ class ZabbixSnmp {
 		elseif ($host['monitored_by'] == ZBX_MONITORED_BY_PROXY_GROUP) {
 			$proxyid = $host['assigned_proxyid'];
 		}
+
+		$this->proxyid = (string) $proxyid;
 
 		// Zabbix server rejects item tests without a timeout ("Unsupported timeout value").
 		$timeouts = getInheritedTimeouts((string) $proxyid);

@@ -17,6 +17,7 @@ Le module ajoute un écran **Data collection → MIB browser** qui permet :
 |---|---|
 | **Arbre MIB** | Chargement progressif, recherche par nom ou par OID, badges par type d'objet (table, ligne, colonne, scalaire, notification…). |
 | **Détails d'un objet** | Syntaxe et type de base (conventions textuelles résolues), accès, statut, unités, index, valeurs énumérées, description. |
+| **Tester la connexion** | Un clic lit le groupe *system* de l'équipement (nom, description, constructeur, modèle, uptime, emplacement) avec le temps de réponse et le niveau de chiffrement. En cas d'échec, un **diagnostic** explique la cause probable et quoi vérifier : communauté, utilisateur SNMPv3, phrase d'authentification ou de chiffrement, niveau de sécurité, DNS, réseau/pare-feu, proxy, hôte pas encore chargé par le serveur. |
 | **Get / Walk** | Résultats traduits en noms MIB (`IF-MIB::ifInOctets.3`), valeurs mises en forme (énumérations, adresses MAC, durées, dates), filtre, export CSV. |
 | **Identifiants** | Ceux de l'interface SNMP de l'hôte, macros utilisateur résolues. Si l'interface utilise une **macro secrète**, le module demande la valeur pour la requête (elle n'est jamais enregistrée). |
 | **Création d'élément** | Élément SNMP `get[OID]` avec type d'information, unités, prétraitement (« Change per second » pour les compteurs, multiplicateur pour les TimeTicks) et **table de correspondance** créée depuis l'énumération MIB. |
@@ -31,6 +32,10 @@ Le module ajoute un écran **Data collection → MIB browser** qui permet :
 | Génération de modèle | MIB chargées |
 |---|---|
 | ![Modèle](docs/screenshots/04-template.png) | ![MIB](docs/screenshots/05-mibs.png) |
+
+| Test de connexion réussi | Test en échec avec diagnostic |
+|---|---|
+| ![Test OK](docs/screenshots/07-test-ok.png) | ![Test KO](docs/screenshots/08-test-ko.png) |
 
 ![Sécurité SNMP](docs/screenshots/06-security.png)
 
@@ -81,7 +86,7 @@ location ~ ^/modules/mibbrowser/data/ {
 
 ## Utilisation
 
-1. Choisir un **hôte** ayant une interface SNMP, puis l'interface.
+1. Choisir un **hôte** ayant une interface SNMP, puis l'interface. **Tester la connexion** vérifie en un clic que l'équipement répond et explique la cause en cas d'échec.
 2. Saisir un OID ou un nom (`sysDescr`, `IF-MIB::ifTable`, `1.3.6.1.2.1.25`), ou sélectionner un objet dans l'arbre.
 3. Cliquer sur **Get** (une valeur ; `.0` est ajouté automatiquement pour un scalaire) ou **Walk** (tout le sous-arbre).
 4. Dans les résultats, **+ Élément** crée un élément pour l'instance choisie ; **Générer un modèle** crée un modèle pour le sous-arbre interrogé.

@@ -211,6 +211,7 @@
 
 			this.$('mibb-get').addEventListener('click', () => this.runQuery('get'));
 			this.$('mibb-walk').addEventListener('click', () => this.runQuery('walk'));
+			this.$('mibb-test').addEventListener('click', () => this.testConnection());
 
 			this.$('mibb-oid').addEventListener('keydown', (e) => {
 				if (e.key === 'Enter') {
@@ -378,8 +379,131 @@
 			this.renderResults(result);
 		}
 
+		async testConnection() {
+			const panel = this.$('mibb-panel-results');
+
+			this.showTab('results');
+
+			if (this.host === null || this.$('mibb-interface').value === '') {
+				this.message(panel, <?= json_encode(_('Choisissez d\'abord un hôte avec une interface SNMP.')) ?>);
+
+				return;
+			}
+
+			const iface = this.currentInterface();
+
+			panel.innerHTML = '';
+			panel.append(this.el('div', {class: 'mibb-loading',
+				text: <?= json_encode(_('Test de la connexion SNMP')) ?> + ' — ' + (iface ? iface.label : '') + ' …'
+			}));
+
+			this.setBusy(true);
+
+			const result = await this.request('mibbrowser.test', {
+				hostid: this.host.hostid,
+				interfaceid: this.$('mibb-interface').value,
+				overrides: this.credentials()
+			});
+
+			this.setBusy(false);
+			panel.innerHTML = '';
+
+			if (result.error && result.diagnosis === undefined) {
+				this.message(panel, result.error);
+
+				return;
+			}
+
+			const via = result.proxy
+				? <?= json_encode(_('via le proxy')) ?> + ' ' + result.proxy
+				: <?= json_encode(_('via le serveur Zabbix')) ?>;
+			const meta = [this.host.name, iface ? iface.label : '', via, result.duration + ' s'].filter((v) => v !== '');
+
+			const card = this.el('div', {class: 'mibb-test ' + (result.ok ? 'mibb-test-ok' : 'mibb-test-ko')},
+				this.el('div', {class: 'mibb-test-head'},
+					this.el('span', {class: 'mibb-test-icon', text: result.ok ? '✔' : '✖'}),
+					this.el('div', {},
+						this.el('div', {class: 'mibb-test-title', text: result.ok
+							? <?= json_encode(_('Connexion SNMP réussie')) ?>
+							: result.diagnosis.title
+						}),
+						this.el('div', {class: 'mibb-test-meta', text: meta.join(' — ')})
+					),
+					result.security ? this.securityBadge(result.security) : null
+				)
+			);
+
+			if (result.ok) {
+				const labels = {
+					name: <?= json_encode(_('Nom (sysName)')) ?>,
+					descr: <?= json_encode(_('Description (sysDescr)')) ?>,
+					vendor: <?= json_encode(_('Constructeur')) ?>,
+					object_id: <?= json_encode(_('Identifiant (sysObjectID)')) ?>,
+					uptime: <?= json_encode(_('Démarré depuis (sysUpTime)')) ?>,
+					location: <?= json_encode(_('Emplacement (sysLocation)')) ?>,
+					contact: <?= json_encode(_('Contact (sysContact)')) ?>
+				};
+				const table = this.el('table', {class: 'mibb-details-table'});
+
+				for (const [field, label] of Object.entries(labels)) {
+					let value = result.info[field];
+
+					if (value === undefined || value === '') {
+						continue;
+					}
+
+					if (field === 'object_id' && result.info.object_label) {
+						value += '  (' + result.info.object_label + ')';
+					}
+
+					table.append(this.el('tr', {}, this.el('th', {text: label}),
+						this.el('td', {class: field === 'object_id' ? 'mibb-mono' : 'mibb-value', text: value})
+					));
+				}
+
+				card.append(table);
+
+				if (result.security && result.security.level !== 'encrypted') {
+					card.append(this.el('div', {class: 'mibb-msg ' + (result.security.encrypted ? 'mibb-msg-info' : 'mibb-msg-warning'),
+						text: result.security.summary + ' — ' + result.security.issues.join(' ')
+					}));
+				}
+
+				card.append(this.el('div', {class: 'mibb-detail-buttons'},
+					this.el('button', {type: 'button', class: 'btn-alt', text: 'Walk system',
+						onclick: () => this.runQuery('walk', 'SNMPv2-MIB::system')
+					}),
+					this.el('button', {type: 'button', class: 'btn-alt', text: 'Walk interfaces',
+						onclick: () => this.runQuery('walk', 'IF-MIB::ifXTable')
+					})
+				));
+			}
+			else {
+				const causes = this.el('ul', {class: 'mibb-test-list'});
+				const actions = this.el('ul', {class: 'mibb-test-list'});
+
+				result.diagnosis.causes.forEach((c) => causes.append(this.el('li', {text: c})));
+				result.diagnosis.actions.forEach((a) => actions.append(this.el('li', {text: a})));
+
+				card.append(
+					this.el('div', {class: 'mibb-test-section', text: <?= json_encode(_('Causes probables')) ?>}), causes,
+					this.el('div', {class: 'mibb-test-section', text: <?= json_encode(_('À vérifier')) ?>}), actions,
+					this.el('details', {class: 'mibb-test-raw'},
+						this.el('summary', {text: <?= json_encode(_('Message d\'erreur détaillé')) ?>}),
+						this.el('pre', {class: 'mibb-mono', text: result.error})
+					)
+				);
+
+				if (result.need_credentials) {
+					this.$('mibb-credentials').style.display = '';
+				}
+			}
+
+			panel.append(card);
+		}
+
 		setBusy(busy) {
-			for (const id of ['mibb-get', 'mibb-walk']) {
+			for (const id of ['mibb-get', 'mibb-walk', 'mibb-test']) {
 				this.$(id).disabled = busy;
 			}
 		}

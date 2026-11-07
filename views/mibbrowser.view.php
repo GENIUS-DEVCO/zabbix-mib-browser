@@ -57,6 +57,9 @@ $query_form = (new CForm())
 			(new CDiv([
 				(new CButton('mibb-get', 'Get'))->setId('mibb-get'),
 				(new CButton('mibb-walk', 'Walk'))->setId('mibb-walk'),
+				(new CButton('mibb-test', _('Tester la connexion')))
+					->setId('mibb-test')
+					->addClass(ZBX_STYLE_BTN_ALT),
 				(new CButton('mibb-credentials-toggle', _('Identifiants')))
 					->setId('mibb-credentials-toggle')
 					->addClass(ZBX_STYLE_BTN_ALT)

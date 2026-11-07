@@ -49,6 +49,10 @@
 			"class": "TemplateGenerate",
 			"layout": "layout.json"
 		},
+		"mibbrowser.test": {
+			"class": "ConnectionTest",
+			"layout": "layout.json"
+		},
 		"mibbrowser.security": {
 			"class": "Security",
 			"layout": "layout.json"
