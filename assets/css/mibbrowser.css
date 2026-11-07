@@ -1,0 +1,470 @@
+/*
+** MIB Browser module for Zabbix 8.0
+** Styles are scoped with the "mibb-" prefix. Colors use currentColor/transparency so the
+** page follows both the light and dark Zabbix themes.
+*/
+
+.mibb-query {
+	margin-bottom: 10px;
+}
+
+.mibb-query-row,
+.mibb-credentials {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 8px 16px;
+}
+
+.mibb-credentials {
+	margin-top: 10px;
+	padding: 10px;
+	border: 1px dashed rgba(128, 128, 128, .5);
+	border-radius: 2px;
+}
+
+.mibb-field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.mibb-field-oid {
+	flex: 1 1 260px;
+}
+
+.mibb-field-oid input {
+	width: 100% !important;
+}
+
+.mibb-buttons,
+.mibb-detail-buttons,
+.mibb-dialog-buttons {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.mibb-select {
+	min-width: 200px;
+	height: 24px;
+	padding: 0 4px;
+	border: 1px solid rgba(128, 128, 128, .6);
+	border-radius: 2px;
+	background: transparent;
+	color: inherit;
+}
+
+.mibb-select option {
+	color: #1f2c33;
+}
+
+.mibb-hint {
+	opacity: .75;
+	font-size: 11px;
+	flex-basis: 100%;
+}
+
+.mibb-warning {
+	margin-bottom: 10px;
+	padding: 8px 10px;
+	border-left: 4px solid #e69e00;
+	background: rgba(230, 158, 0, .12);
+}
+
+/* Layout */
+
+.mibb-layout {
+	display: grid;
+	grid-template-columns: minmax(260px, 30%) 1fr;
+	gap: 12px;
+	min-height: 520px;
+}
+
+@media (max-width: 900px) {
+	.mibb-layout {
+		grid-template-columns: 1fr;
+	}
+}
+
+.mibb-tree-panel,
+.mibb-main {
+	border: 1px solid rgba(128, 128, 128, .35);
+	border-radius: 2px;
+	padding: 8px;
+	min-width: 0;
+}
+
+.mibb-tree-panel {
+	position: relative;
+	max-height: calc(100vh - 220px);
+	overflow: auto;
+}
+
+.mibb-search {
+	width: 100% !important;
+	box-sizing: border-box;
+	margin-bottom: 6px;
+}
+
+.mibb-search-results {
+	position: absolute;
+	left: 8px;
+	right: 8px;
+	z-index: 20;
+	max-height: 360px;
+	overflow: auto;
+	background: var(--mibb-bg, #fff);
+	border: 1px solid rgba(128, 128, 128, .5);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, .2);
+}
+
+html[theme="dark-theme"] .mibb-search-results,
+html[theme="hc-dark"] .mibb-search-results,
+html[theme="dark-theme"] .mibb-dialog,
+html[theme="hc-dark"] .mibb-dialog {
+	--mibb-bg: #2b2b2b;
+}
+
+.mibb-search-item {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 6px;
+	cursor: pointer;
+}
+
+.mibb-search-item:hover {
+	background: rgba(128, 128, 128, .15);
+}
+
+.mibb-search-meta {
+	margin-left: auto;
+	opacity: .65;
+	font-size: 11px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.mibb-search-empty {
+	padding: 6px;
+	opacity: .7;
+}
+
+/* Tree */
+
+.mibb-tree,
+.mibb-tree ul {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.mibb-tree ul {
+	padding-left: 14px;
+	display: none;
+}
+
+.mibb-tree li.mibb-open > ul {
+	display: block;
+}
+
+.mibb-node-row {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 4px;
+	border-radius: 2px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.mibb-node-row:hover {
+	background: rgba(128, 128, 128, .15);
+}
+
+.mibb-node-row.mibb-selected {
+	background: rgba(0, 120, 212, .18);
+	outline: 1px solid rgba(0, 120, 212, .5);
+}
+
+.mibb-toggle {
+	display: inline-block;
+	width: 12px;
+	text-align: center;
+	opacity: .7;
+}
+
+.mibb-node-arc {
+	opacity: .55;
+	font-size: 11px;
+}
+
+.mibb-badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 14px;
+	height: 14px;
+	border-radius: 3px;
+	font-size: 9px;
+	font-weight: bold;
+	color: #fff;
+	background: #8c9aa5;
+}
+
+.mibb-badge-node {
+	min-width: 6px;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: rgba(128, 128, 128, .6);
+}
+
+.mibb-badge-module { background: #6a4fbf; }
+.mibb-badge-table { background: #0275b8; }
+.mibb-badge-row { background: #2e8bc0; }
+.mibb-badge-column { background: #429e47; }
+.mibb-badge-scalar { background: #2c8a3d; }
+.mibb-badge-notification { background: #d64e00; }
+.mibb-badge-group,
+.mibb-badge-compliance { background: #8c9aa5; }
+
+/* Tabs and panels */
+
+.mibb-tabs {
+	display: flex;
+	gap: 2px;
+	border-bottom: 1px solid rgba(128, 128, 128, .35);
+	margin-bottom: 8px;
+}
+
+.mibb-tab {
+	border: 0;
+	background: transparent;
+	color: inherit;
+	padding: 6px 12px;
+	cursor: pointer;
+	border-bottom: 2px solid transparent;
+	font: inherit;
+}
+
+.mibb-tab-active {
+	border-bottom-color: #0275b8;
+	font-weight: bold;
+}
+
+.mibb-panel {
+	overflow: auto;
+	max-height: calc(100vh - 260px);
+}
+
+.mibb-empty,
+.mibb-loading {
+	padding: 24px;
+	text-align: center;
+	opacity: .7;
+}
+
+.mibb-msg {
+	margin: 6px 0;
+	padding: 6px 10px;
+	border-left: 4px solid;
+	white-space: pre-wrap;
+}
+
+.mibb-msg-error { border-color: #d64e4e; background: rgba(214, 78, 78, .12); }
+.mibb-msg-warning { border-color: #e69e00; background: rgba(230, 158, 0, .12); }
+.mibb-msg-success { border-color: #429e47; background: rgba(66, 158, 71, .12); }
+.mibb-msg-info { border-color: #0275b8; background: rgba(2, 117, 184, .1); }
+
+.mibb-results-header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 6px;
+}
+
+.mibb-results-info {
+	font-weight: bold;
+	margin-right: auto;
+}
+
+.mibb-filter {
+	width: 200px;
+}
+
+.mibb-results-table td {
+	vertical-align: top;
+}
+
+.mibb-mono {
+	font-family: "DejaVu Sans Mono", Consolas, "Courier New", monospace;
+	font-size: 11px;
+}
+
+.mibb-value {
+	white-space: pre-wrap;
+	word-break: break-word;
+	max-width: 520px;
+}
+
+.mibb-unknown {
+	opacity: .65;
+}
+
+.mibb-actions {
+	white-space: nowrap;
+	text-align: right;
+}
+
+.mibb-actions .btn-link + .btn-link {
+	margin-left: 8px;
+}
+
+.mibb-danger {
+	color: #d64e4e !important;
+}
+
+.mibb-warn-text {
+	color: #e69e00;
+}
+
+.mibb-details-table {
+	border-collapse: collapse;
+	margin: 10px 0;
+}
+
+.mibb-details-table th {
+	text-align: left;
+	padding: 3px 14px 3px 0;
+	white-space: nowrap;
+	vertical-align: top;
+	opacity: .75;
+	font-weight: normal;
+}
+
+.mibb-details-table td {
+	padding: 3px 0;
+	word-break: break-word;
+}
+
+.mibb-enum {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.mibb-enum-item {
+	padding: 1px 6px;
+	border: 1px solid rgba(128, 128, 128, .4);
+	border-radius: 10px;
+	font-size: 11px;
+}
+
+.mibb-description {
+	white-space: pre-wrap;
+	line-height: 1.5;
+	padding: 8px 10px;
+	border-left: 3px solid rgba(128, 128, 128, .4);
+	max-width: 900px;
+}
+
+.mibb-upload {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 10px;
+}
+
+.mibb-upload-status {
+	flex-basis: 100%;
+}
+
+/* Dialogs */
+
+.mibb-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 900;
+	background: rgba(0, 0, 0, .35);
+}
+
+.mibb-dialog {
+	position: fixed;
+	top: 8vh;
+	z-index: 901;
+	width: min(640px, 94vw);
+	max-height: 84vh;
+	overflow: auto;
+	margin: 0 auto;
+	padding: 16px 20px;
+	border: 1px solid rgba(128, 128, 128, .5);
+	border-radius: 3px;
+	background: var(--mibb-bg, #fff);
+	color: inherit;
+	box-shadow: 0 8px 28px rgba(0, 0, 0, .3);
+}
+
+.mibb-dialog h3 {
+	margin: 0 0 8px;
+	font-size: 15px;
+}
+
+.mibb-dialog form > .mibb-field,
+.mibb-dialog .mibb-inline,
+.mibb-dialog .mibb-checks {
+	margin-bottom: 10px;
+}
+
+.mibb-dialog-oid {
+	margin-bottom: 12px;
+	opacity: .75;
+	font-family: "DejaVu Sans Mono", Consolas, monospace;
+	font-size: 11px;
+	word-break: break-all;
+}
+
+.mibb-inline {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+}
+
+.mibb-checks {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.mibb-radios {
+	display: flex;
+	gap: 16px;
+}
+
+.mibb-tpl-preview {
+	max-height: 260px;
+	overflow: auto;
+}
+
+.mibb-tpl-counts {
+	font-weight: bold;
+	margin-bottom: 4px;
+}
+
+.mibb-tpl-list {
+	margin: 0;
+	padding-left: 18px;
+	font-size: 11px;
+}
+
+.mibb-tpl-list ul {
+	padding-left: 16px;
+}
+
+.mibb-dialog-message {
+	min-height: 4px;
+}

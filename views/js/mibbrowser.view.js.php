@@ -1,0 +1,1167 @@
+<?php declare(strict_types = 0);
+/*
+** MIB Browser module for Zabbix 8.0
+** Client side of the MIB browser page.
+**
+** @var CView $this
+*/
+?>
+
+<script>
+	const mibb_view = new class {
+
+		KIND_LABELS = {
+			node: <?= json_encode(_('Nœud')) ?>,
+			module: <?= json_encode(_('Module')) ?>,
+			table: <?= json_encode(_('Table')) ?>,
+			row: <?= json_encode(_('Ligne de table')) ?>,
+			column: <?= json_encode(_('Colonne')) ?>,
+			scalar: <?= json_encode(_('Scalaire')) ?>,
+			notification: <?= json_encode(_('Notification (trap)')) ?>,
+			group: <?= json_encode(_('Groupe')) ?>,
+			compliance: <?= json_encode(_('Conformité')) ?>
+		};
+
+		KIND_BADGES = {
+			node: '', module: 'M', table: 'T', row: 'R', column: 'C', scalar: 'S', notification: 'N', group: 'G',
+			compliance: 'G'
+		};
+
+		init({tokens, csrf_field, oid, is_super_admin, max_upload_size}) {
+			this.tokens = tokens;
+			this.csrf_field = csrf_field;
+			this.is_super_admin = is_super_admin;
+			this.max_upload_size = max_upload_size;
+			this.host = null;
+			this.interfaces = [];
+			this.selected_oid = null;
+			this.selected_node = null;
+			this.last_rows = [];
+			this.item_row = null;
+			this.template_roots = [];
+
+			this.$ = (id) => document.getElementById(id);
+
+			this.initTabs();
+			this.initQuery();
+			this.initTree();
+			this.initSearch();
+			this.initItemDialog();
+			this.initTemplateDialog();
+
+			this.loadRoots();
+
+			const host_data = jQuery('#mibb_hostid').multiSelect('getData');
+
+			if (host_data.length) {
+				this.onHostChange();
+			}
+
+			if (oid !== '') {
+				this.$('mibb-oid').value = oid;
+				this.revealInTree(oid);
+			}
+		}
+
+		/* ------------------------------------------------------------------ */
+		/* Helpers                                                              */
+		/* ------------------------------------------------------------------ */
+
+		el(tag, attrs = {}, ...children) {
+			const node = document.createElement(tag);
+
+			for (const [name, value] of Object.entries(attrs)) {
+				if (value === null || value === undefined || value === false) {
+					continue;
+				}
+
+				if (name === 'class') {
+					node.className = value;
+				}
+				else if (name === 'text') {
+					node.textContent = value;
+				}
+				else if (name.startsWith('on')) {
+					node.addEventListener(name.substring(2), value);
+				}
+				else if (name === 'dataset') {
+					Object.assign(node.dataset, value);
+				}
+				else {
+					node.setAttribute(name, value === true ? '' : value);
+				}
+			}
+
+			for (const child of children.flat()) {
+				if (child === null || child === undefined || child === false) {
+					continue;
+				}
+
+				node.append(child instanceof Node ? child : document.createTextNode(String(child)));
+			}
+
+			return node;
+		}
+
+		async request(action, params = {}, files = null) {
+			const body = new FormData();
+
+			body.append(this.csrf_field, this.tokens[action]);
+
+			const add = (name, value) => {
+				if (Array.isArray(value)) {
+					value.forEach((v) => add(name + '[]', v));
+				}
+				else if (value !== null && typeof value === 'object') {
+					Object.entries(value).forEach(([k, v]) => add(name + '[' + k + ']', v));
+				}
+				else if (value !== null && value !== undefined) {
+					body.append(name, value);
+				}
+			};
+
+			Object.entries(params).forEach(([name, value]) => add(name, value));
+
+			if (files !== null) {
+				for (const file of files) {
+					body.append('mibs[]', file, file.name);
+				}
+			}
+
+			let response;
+
+			try {
+				response = await fetch('zabbix.php?action=' + encodeURIComponent(action), {method: 'POST', body});
+			}
+			catch (e) {
+				return {error: <?= json_encode(_('Erreur réseau.')) ?> + ' ' + e.message};
+			}
+
+			const text = await response.text();
+
+			try {
+				return JSON.parse(text);
+			}
+			catch (e) {
+				return {error: <?= json_encode(_('Réponse inattendue du serveur.')) ?> + ' (HTTP ' + response.status + ')'};
+			}
+		}
+
+		message(container, text, type = 'error') {
+			container.innerHTML = '';
+
+			if (text) {
+				container.append(this.el('div', {class: 'mibb-msg mibb-msg-' + type, text}));
+			}
+		}
+
+		kindBadge(kind) {
+			const badge = this.KIND_BADGES[kind] ?? '';
+
+			return this.el('span', {
+				class: 'mibb-badge mibb-badge-' + kind,
+				title: this.KIND_LABELS[kind] ?? kind,
+				text: badge
+			});
+		}
+
+		/* ------------------------------------------------------------------ */
+		/* Tabs                                                                 */
+		/* ------------------------------------------------------------------ */
+
+		initTabs() {
+			document.querySelectorAll('.mibb-tab').forEach((tab) => {
+				tab.addEventListener('click', () => this.showTab(tab.dataset.tab));
+			});
+		}
+
+		showTab(name) {
+			document.querySelectorAll('.mibb-tab').forEach((tab) => {
+				tab.classList.toggle('mibb-tab-active', tab.dataset.tab === name);
+			});
+
+			for (const panel of ['results', 'details', 'mibs']) {
+				this.$('mibb-panel-' + panel).style.display = panel === name ? '' : 'none';
+			}
+
+			if (name === 'mibs' && !this.mibs_loaded) {
+				this.loadMibs();
+			}
+		}
+
+		/* ------------------------------------------------------------------ */
+		/* Host / query                                                          */
+		/* ------------------------------------------------------------------ */
+
+		initQuery() {
+			jQuery('#mibb_hostid').on('change', () => this.onHostChange());
+
+			this.$('mibb-get').addEventListener('click', () => this.runQuery('get'));
+			this.$('mibb-walk').addEventListener('click', () => this.runQuery('walk'));
+
+			this.$('mibb-oid').addEventListener('keydown', (e) => {
+				if (e.key === 'Enter') {
+					e.preventDefault();
+					this.runQuery('walk');
+				}
+			});
+
+			this.$('mibb-query').addEventListener('submit', (e) => e.preventDefault());
+
+			this.$('mibb-credentials-toggle').addEventListener('click', () => {
+				const panel = this.$('mibb-credentials');
+				panel.style.display = panel.style.display === 'none' ? '' : 'none';
+			});
+		}
+
+		async onHostChange() {
+			const data = jQuery('#mibb_hostid').multiSelect('getData');
+			const select = this.$('mibb-interface');
+
+			select.innerHTML = '';
+			select.disabled = true;
+			this.host = null;
+			this.interfaces = [];
+
+			if (!data.length) {
+				return;
+			}
+
+			const result = await this.request('mibbrowser.interfaces', {hostid: data[0].id});
+
+			if (result.error) {
+				this.message(this.$('mibb-panel-results'), result.error);
+				this.showTab('results');
+
+				return;
+			}
+
+			this.host = result.host;
+			this.interfaces = result.interfaces;
+
+			if (!result.interfaces.length) {
+				select.append(this.el('option', {value: '', text: <?= json_encode(_('Aucune interface SNMP')) ?>}));
+
+				return;
+			}
+
+			for (const iface of result.interfaces) {
+				select.append(this.el('option', {value: iface.interfaceid, text: iface.label}));
+			}
+
+			select.disabled = false;
+		}
+
+		credentials() {
+			const overrides = {};
+
+			for (const field of ['community', 'securityname', 'authpassphrase', 'privpassphrase', 'contextname']) {
+				const value = this.$('mibb-cred-' + field).value;
+
+				if (value !== '') {
+					overrides[field] = value;
+				}
+			}
+
+			return overrides;
+		}
+
+		async runQuery(operation, oid = null) {
+			const panel = this.$('mibb-panel-results');
+
+			if (oid !== null) {
+				this.$('mibb-oid').value = oid;
+			}
+
+			oid = this.$('mibb-oid').value.trim();
+
+			this.showTab('results');
+
+			if (this.host === null || this.$('mibb-interface').value === '') {
+				this.message(panel, <?= json_encode(_('Choisissez d\'abord un hôte avec une interface SNMP.')) ?>);
+
+				return;
+			}
+
+			if (oid === '') {
+				this.message(panel, <?= json_encode(_('Saisissez un OID ou un nom d\'objet MIB.')) ?>);
+
+				return;
+			}
+
+			panel.innerHTML = '';
+			panel.append(this.el('div', {class: 'mibb-loading',
+				text: (operation === 'walk' ? 'Walk ' : 'Get ') + oid + ' …'
+			}));
+
+			this.setBusy(true);
+
+			const result = await this.request('mibbrowser.query', {
+				hostid: this.host.hostid,
+				interfaceid: this.$('mibb-interface').value,
+				oid,
+				operation,
+				overrides: this.credentials()
+			});
+
+			this.setBusy(false);
+
+			if (result.error) {
+				this.message(panel, result.error);
+
+				if (result.need_credentials) {
+					this.$('mibb-credentials').style.display = '';
+				}
+
+				return;
+			}
+
+			this.renderResults(result);
+		}
+
+		setBusy(busy) {
+			for (const id of ['mibb-get', 'mibb-walk']) {
+				this.$(id).disabled = busy;
+			}
+		}
+
+		/* ------------------------------------------------------------------ */
+		/* Results                                                              */
+		/* ------------------------------------------------------------------ */
+
+		renderResults(result) {
+			const panel = this.$('mibb-panel-results');
+			panel.innerHTML = '';
+			this.last_rows = result.rows;
+
+			const info = [
+				result.operation === 'walk' ? 'Walk' : 'Get',
+				' ', result.snmp_oid, ' — ',
+				result.total + ' ' + <?= json_encode(_('valeur(s)')) ?>,
+				' — ' + result.duration + ' s',
+				this.host ? ' — ' + this.host.name + (this.host.proxy ? ' (proxy ' + this.host.proxy + ')' : '') : ''
+			].join('');
+
+			const filter = this.el('input', {type: 'text', class: 'mibb-filter',
+				placeholder: <?= json_encode(_('Filtrer les résultats')) ?>
+			});
+
+			const header = this.el('div', {class: 'mibb-results-header'},
+				this.el('span', {class: 'mibb-results-info', text: info}),
+				filter,
+				this.el('button', {type: 'button', class: 'btn-alt', text: 'CSV', onclick: () => this.exportCsv()}),
+				result.operation === 'walk' && result.rows.length
+					? this.el('button', {type: 'button', class: 'btn-alt',
+						text: <?= json_encode(_('Générer un modèle')) ?>,
+						onclick: () => this.openTemplateDialog([this.subtreeRoot(result.oid)])
+					})
+					: null
+			);
+
+			panel.append(header);
+
+			if (result.limited) {
+				panel.append(this.el('div', {class: 'mibb-msg mibb-msg-warning',
+					text: <?= json_encode(_('Affichage limité aux premières valeurs (option max_results du module).')) ?>
+				}));
+			}
+
+			if (result.truncated) {
+				panel.append(this.el('div', {class: 'mibb-msg mibb-msg-warning',
+					text: <?= json_encode(_('Le serveur Zabbix a tronqué la réponse : faites un walk sur un sous-arbre plus petit.')) ?>
+				}));
+			}
+
+			if (!result.rows.length) {
+				panel.append(this.el('div', {class: 'mibb-empty',
+					text: <?= json_encode(_('Aucune valeur (objet absent sur l\'équipement ou hors de la vue SNMP).')) ?>
+				}));
+
+				return;
+			}
+
+			const tbody = this.el('tbody');
+			const table = this.el('table', {class: 'list-table mibb-results-table'},
+				this.el('thead', {}, this.el('tr', {},
+					this.el('th', {text: 'OID'}),
+					this.el('th', {text: <?= json_encode(_('Name')) ?>}),
+					this.el('th', {text: <?= json_encode(_('Type')) ?>}),
+					this.el('th', {text: <?= json_encode(_('Value')) ?>}),
+					this.el('th', {text: ''})
+				)),
+				tbody
+			);
+
+			result.rows.forEach((row, i) => {
+				const tr = this.el('tr', {dataset: {i}},
+					this.el('td', {class: 'mibb-mono', text: row.oid}),
+					this.el('td', {},
+						row.node_oid
+							? this.el('a', {href: 'javascript:void(0)', class: 'mibb-mono', text: row.label,
+								title: <?= json_encode(_('Afficher dans l\'arbre')) ?>,
+								onclick: () => this.revealInTree(row.node_oid)
+							})
+							: this.el('span', {class: 'mibb-mono mibb-unknown', text: row.label})
+					),
+					this.el('td', {text: row.type}),
+					this.el('td', {class: 'mibb-value', text: row.value}),
+					this.el('td', {class: 'mibb-actions'},
+						row.can_create_item
+							? this.el('button', {type: 'button', class: 'btn-link', text: <?= json_encode(_('+ Élément')) ?>,
+								onclick: () => this.openItemDialog(row)
+							})
+							: null
+					)
+				);
+				tbody.append(tr);
+			});
+
+			panel.append(table);
+
+			filter.addEventListener('input', () => {
+				const term = filter.value.toLowerCase();
+
+				tbody.querySelectorAll('tr').forEach((tr) => {
+					tr.style.display = term === '' || tr.textContent.toLowerCase().includes(term) ? '' : 'none';
+				});
+			});
+		}
+
+		subtreeRoot(oid) {
+			return oid;
+		}
+
+		exportCsv() {
+			const escape = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+			const lines = [['OID', 'Name', 'Type', 'Value', 'Raw'].join(';')];
+
+			for (const row of this.last_rows) {
+				lines.push([row.oid, row.label, row.type, row.value, row.raw].map(escape).join(';'));
+			}
+
+			this.download('snmp-' + Date.now() + '.csv', '﻿' + lines.join('\r\n'), 'text/csv');
+		}
+
+		download(filename, content, mime) {
+			const url = URL.createObjectURL(new Blob([content], {type: mime + ';charset=utf-8'}));
+			const link = this.el('a', {href: url, download: filename});
+
+			document.body.append(link);
+			link.click();
+			link.remove();
+			setTimeout(() => URL.revokeObjectURL(url), 1000);
+		}
+
+		/* ------------------------------------------------------------------ */
+		/* Tree                                                                 */
+		/* ------------------------------------------------------------------ */
+
+		initTree() {
+			this.$('mibb-tree').addEventListener('click', (e) => {
+				const row = e.target.closest('.mibb-node-row');
+
+				if (!row) {
+					return;
+				}
+
+				const li = row.parentElement;
+
+				if (e.target.closest('.mibb-toggle')) {
+					this.toggleNode(li);
+				}
+				else {
+					this.selectNode(li.dataset.oid);
+				}
+			});
+
+			this.$('mibb-tree').addEventListener('dblclick', (e) => {
+				const row = e.target.closest('.mibb-node-row');
+
+				if (row) {
+					this.toggleNode(row.parentElement);
+				}
+			});
+		}
+
+		async loadRoots() {
+			const result = await this.request('mibbrowser.tree', {parent: ''});
+			const tree = this.$('mibb-tree');
+
+			tree.innerHTML = '';
+
+			if (result.error) {
+				tree.append(this.el('li', {class: 'mibb-msg mibb-msg-error', text: result.error}));
+
+				return;
+			}
+
+			for (const child of result.children) {
+				tree.append(this.treeNode(child));
+			}
+
+			// Open iso.org.dod.internet by default.
+			const path = ['1', '1.3', '1.3.6', '1.3.6.1'];
+
+			for (const oid of path) {
+				const li = tree.querySelector('li[data-oid="' + oid + '"]');
+
+				if (li) {
+					await this.expandNode(li);
+				}
+			}
+		}
+
+		treeNode(item) {
+			return this.el('li', {class: 'mibb-node', dataset: {oid: item.oid, loaded: '0'}},
+				this.el('div', {class: 'mibb-node-row', title: item.oid + (item.module ? ' — ' + item.module : '')},
+					this.el('span', {class: 'mibb-toggle' + (item.has_children ? '' : ' mibb-toggle-leaf'),
+						text: item.has_children ? '▸' : ''
+					}),
+					this.kindBadge(item.kind),
+					this.el('span', {class: 'mibb-node-name', text: item.name}),
+					this.el('span', {class: 'mibb-node-arc', text: '(' + item.oid.split('.').pop() + ')'})
+				)
+			);
+		}
+
+		async expandNode(li, children = null) {
+			const toggle = li.querySelector(':scope > .mibb-node-row > .mibb-toggle');
+
+			if (toggle.classList.contains('mibb-toggle-leaf')) {
+				return;
+			}
+
+			if (li.dataset.loaded !== '1') {
+				if (children === null) {
+					const result = await this.request('mibbrowser.tree', {parent: li.dataset.oid});
+					children = result.children ?? [];
+				}
+
+				const ul = this.el('ul');
+
+				for (const child of children) {
+					ul.append(this.treeNode(child));
+				}
+
+				li.append(ul);
+				li.dataset.loaded = '1';
+			}
+
+			li.classList.add('mibb-open');
+			toggle.textContent = '▾';
+		}
+
+		collapseNode(li) {
+			li.classList.remove('mibb-open');
+
+			const toggle = li.querySelector(':scope > .mibb-node-row > .mibb-toggle');
+
+			if (!toggle.classList.contains('mibb-toggle-leaf')) {
+				toggle.textContent = '▸';
+			}
+		}
+
+		toggleNode(li) {
+			li.classList.contains('mibb-open') ? this.collapseNode(li) : this.expandNode(li);
+		}
+
+		async revealInTree(value) {
+			const result = await this.request('mibbrowser.tree', {path: value});
+
+			if (result.error) {
+				return;
+			}
+
+			const tree = this.$('mibb-tree');
+
+			for (const [ancestor, children] of Object.entries(result.levels)) {
+				const li = tree.querySelector('li[data-oid="' + ancestor + '"]');
+
+				if (li && ancestor !== result.target) {
+					await this.expandNode(li, children);
+				}
+			}
+
+			this.selectNode(result.target);
+
+			const li = tree.querySelector('li[data-oid="' + result.target + '"]');
+
+			if (li) {
+				li.scrollIntoView({block: 'center'});
+			}
+		}
+
+		async selectNode(oid) {
+			const tree = this.$('mibb-tree');
+
+			tree.querySelectorAll('.mibb-selected').forEach((n) => n.classList.remove('mibb-selected'));
+
+			const li = tree.querySelector('li[data-oid="' + oid + '"]');
+
+			if (li) {
+				li.querySelector(':scope > .mibb-node-row').classList.add('mibb-selected');
+			}
+
+			this.selected_oid = oid;
+
+			const seq = this.select_seq = (this.select_seq ?? 0) + 1;
+			const result = await this.request('mibbrowser.node', {oid});
+
+			// A newer selection was made while this one was loading.
+			if (seq !== this.select_seq) {
+				return;
+			}
+
+			if (result.error) {
+				this.message(this.$('mibb-panel-details'), result.error);
+
+				return;
+			}
+
+			this.selected_node = result.node;
+			this.$('mibb-oid').value = result.node.label ?? oid;
+			this.renderDetails(result.node);
+			this.showTab('details');
+		}
+
+		/* ------------------------------------------------------------------ */
+		/* Search                                                               */
+		/* ------------------------------------------------------------------ */
+
+		initSearch() {
+			const input = this.$('mibb-search');
+			const box = this.$('mibb-search-results');
+			let timer = null;
+
+			input.addEventListener('input', () => {
+				clearTimeout(timer);
+				timer = setTimeout(() => this.search(input.value), 250);
+			});
+
+			input.addEventListener('keydown', (e) => {
+				if (e.key === 'Escape') {
+					input.value = '';
+					box.style.display = 'none';
+				}
+			});
+
+			box.addEventListener('click', (e) => {
+				const item = e.target.closest('[data-oid]');
+
+				if (item) {
+					box.style.display = 'none';
+					this.revealInTree(item.dataset.oid);
+				}
+			});
+		}
+
+		async search(term) {
+			const box = this.$('mibb-search-results');
+
+			term = term.trim();
+
+			if (term.length < 2) {
+				box.style.display = 'none';
+
+				return;
+			}
+
+			const seq = this.search_seq = (this.search_seq ?? 0) + 1;
+			const result = await this.request('mibbrowser.tree', {search: term});
+
+			if (seq !== this.search_seq) {
+				return;
+			}
+
+			box.innerHTML = '';
+			box.style.display = '';
+
+			if (!result.results || !result.results.length) {
+				box.append(this.el('div', {class: 'mibb-search-empty', text: <?= json_encode(_('Aucun résultat')) ?>}));
+
+				return;
+			}
+
+			for (const item of result.results) {
+				box.append(this.el('div', {class: 'mibb-search-item', dataset: {oid: item.oid}},
+					this.kindBadge(item.kind),
+					this.el('span', {class: 'mibb-node-name', text: item.name}),
+					this.el('span', {class: 'mibb-search-meta', text: item.module + ' — ' + item.oid})
+				));
+			}
+		}
+
+		/* ------------------------------------------------------------------ */
+		/* Details                                                              */
+		/* ------------------------------------------------------------------ */
+
+		renderDetails(node) {
+			const panel = this.$('mibb-panel-details');
+			panel.innerHTML = '';
+
+			const rows = [
+				[<?= json_encode(_('Name')) ?>, node.label ?? node.name],
+				['OID', node.oid],
+				[<?= json_encode(_('Type')) ?>, this.KIND_LABELS[node.kind] ?? node.kind],
+				[<?= json_encode(_('Syntaxe')) ?>, node.syntax && node.syntax !== node.base_type
+					? node.syntax + ' (' + node.base_type + ')'
+					: node.syntax],
+				[<?= json_encode(_('Accès')) ?>, node.access],
+				[<?= json_encode(_('Status')) ?>, node.status],
+				[<?= json_encode(_('Units')) ?>, node.units],
+				[<?= json_encode(_('Index')) ?>, node.index ? node.index.join(', ')
+					+ (node.index_from ? ' (' + <?= json_encode(_('via')) ?> + ' ' + node.index_from + ')' : '')
+					: null],
+				['Display hint', node.display_hint],
+				[<?= json_encode(_('Objets')) ?>, node.objects ? node.objects.join(', ') : null]
+			];
+
+			const table = this.el('table', {class: 'mibb-details-table'});
+
+			for (const [label, value] of rows) {
+				if (value === null || value === undefined || value === '') {
+					continue;
+				}
+
+				table.append(this.el('tr', {},
+					this.el('th', {text: label}),
+					this.el('td', {class: label === 'OID' ? 'mibb-mono' : '', text: value})
+				));
+			}
+
+			if (node.enum) {
+				const list = this.el('div', {class: 'mibb-enum'});
+
+				for (const [value, label] of Object.entries(node.enum)) {
+					list.append(this.el('span', {class: 'mibb-enum-item', text: label + ' (' + value + ')'}));
+				}
+
+				table.append(this.el('tr', {}, this.el('th', {text: <?= json_encode(_('Valeurs')) ?>}),
+					this.el('td', {}, list)
+				));
+			}
+
+			const buttons = this.el('div', {class: 'mibb-detail-buttons'},
+				this.el('button', {type: 'button', text: 'Get',
+					onclick: () => this.runQuery('get', node.label ?? node.oid)
+				}),
+				this.el('button', {type: 'button', text: 'Walk',
+					onclick: () => this.runQuery('walk', node.label ?? node.oid)
+				}),
+				node.can_template
+					? this.el('button', {type: 'button', class: 'btn-alt', text: <?= json_encode(_('Générer un modèle')) ?>,
+						onclick: () => this.openTemplateDialog([node.oid], node)
+					})
+					: null,
+				node.kind === 'scalar' && node.can_create_item
+					? this.el('button', {type: 'button', class: 'btn-alt', text: <?= json_encode(_('Créer un élément')) ?>,
+						onclick: () => this.openItemDialog({
+							oid: node.oid + '.0', node_oid: node.oid, index: '0', label: node.label + '.0'
+						})
+					})
+					: null
+			);
+
+			panel.append(buttons, table);
+
+			if (node.kind === 'column' && node.can_create_item) {
+				panel.append(this.el('div', {class: 'mibb-hint',
+					text: <?= json_encode(_('Pour créer un élément sur une colonne, faites un Walk puis choisissez l\'instance (« + Élément ») dans les résultats, ou générez un modèle avec découverte.')) ?>
+				}));
+			}
+
+			if (node.description) {
+				panel.append(this.el('div', {class: 'mibb-description', text: node.description}));
+			}
+		}
+
+		/* ------------------------------------------------------------------ */
+		/* Loaded MIBs                                                           */
+		/* ------------------------------------------------------------------ */
+
+		async loadMibs() {
+			const panel = this.$('mibb-panel-mibs');
+			panel.innerHTML = '';
+			panel.append(this.el('div', {class: 'mibb-loading', text: '…'}));
+
+			const result = await this.request('mibbrowser.mibs');
+			panel.innerHTML = '';
+
+			if (result.error) {
+				this.message(panel, result.error);
+
+				return;
+			}
+
+			this.mibs_loaded = true;
+
+			if (this.is_super_admin) {
+				const input = this.el('input', {type: 'file', multiple: true, accept: '.mib,.txt,.my,.smi,text/plain',
+					id: 'mibb-upload-input'
+				});
+				const status = this.el('div', {class: 'mibb-upload-status'});
+
+				panel.append(this.el('div', {class: 'mibb-upload'},
+					this.el('label', {for: 'mibb-upload-input', text: <?= json_encode(_('Ajouter des fichiers MIB :')) ?>}),
+					input,
+					this.el('button', {type: 'button', text: <?= json_encode(_('Téléverser')) ?>,
+						onclick: () => this.uploadMibs(input, status)
+					}),
+					status
+				));
+			}
+			else {
+				panel.append(this.el('div', {class: 'mibb-hint',
+					text: <?= json_encode(_('Seul un Super administrateur peut ajouter ou supprimer des MIB.')) ?>
+				}));
+			}
+
+			if (result.storage_problems && result.storage_problems.length) {
+				panel.append(this.el('div', {class: 'mibb-msg mibb-msg-warning',
+					text: <?= json_encode(_('Dossier non accessible en écriture : ')) ?> + result.storage_problems.join(', ')
+				}));
+			}
+
+			const tbody = this.el('tbody');
+
+			for (const module of result.modules) {
+				tbody.append(this.el('tr', {},
+					this.el('td', {},
+						module.root_oid
+							? this.el('a', {href: 'javascript:void(0)', text: module.name,
+								onclick: () => this.revealInTree(module.root_oid)
+							})
+							: module.name
+					),
+					this.el('td', {class: 'mibb-mono', text: module.file}),
+					this.el('td', {text: module.source === 'user' ? <?= json_encode(_('Ajoutée')) ?> : <?= json_encode(_('Standard')) ?>}),
+					this.el('td', {text: module.objects}),
+					this.el('td', {class: module.missing.length ? 'mibb-warn-text' : '',
+						text: module.missing.length
+							? <?= json_encode(_('Dépendances manquantes : ')) ?> + module.missing.join(', ')
+							: (module.unresolved ? module.unresolved + ' ' + <?= json_encode(_('objet(s) non résolu(s)')) ?> : 'OK')
+					}),
+					this.el('td', {class: 'mibb-actions'},
+						this.el('button', {type: 'button', class: 'btn-link', text: <?= json_encode(_('Modèle')) ?>,
+							onclick: () => this.openTemplateDialog(['module:' + module.name], {name: module.name, module: module.name})
+						}),
+						this.is_super_admin && module.source === 'user'
+							? this.el('button', {type: 'button', class: 'btn-link mibb-danger', text: <?= json_encode(_('Delete')) ?>,
+								onclick: () => this.deleteMib(module.name)
+							})
+							: null
+					)
+				));
+			}
+
+			panel.append(this.el('table', {class: 'list-table'},
+				this.el('thead', {}, this.el('tr', {},
+					this.el('th', {text: <?= json_encode(_('Module')) ?>}),
+					this.el('th', {text: <?= json_encode(_('Fichier')) ?>}),
+					this.el('th', {text: <?= json_encode(_('Source')) ?>}),
+					this.el('th', {text: <?= json_encode(_('Objets')) ?>}),
+					this.el('th', {text: <?= json_encode(_('État')) ?>}),
+					this.el('th', {text: ''})
+				)),
+				tbody
+			));
+		}
+
+		async uploadMibs(input, status) {
+			if (!input.files.length) {
+				return;
+			}
+
+			for (const file of input.files) {
+				if (file.size > this.max_upload_size) {
+					this.message(status, file.name + ' : ' + <?= json_encode(_('fichier trop volumineux.')) ?>);
+
+					return;
+				}
+			}
+
+			this.message(status, <?= json_encode(_('Téléversement…')) ?>, 'info');
+
+			const result = await this.request('mibbrowser.mib.upload', {}, input.files);
+
+			if (result.error) {
+				this.message(status, result.error);
+
+				return;
+			}
+
+			const lines = result.results.map((r) => r.error
+				? r.file + ' : ' + r.error
+				: r.file + ' : ' + r.modules.join(', ') + ' (' + r.objects + ' ' + <?= json_encode(_('objets')) ?> + ')'
+			);
+
+			this.mibs_loaded = false;
+			await this.loadMibs();
+			await this.loadRoots();
+
+			const new_status = this.$('mibb-panel-mibs').querySelector('.mibb-upload-status');
+
+			if (new_status) {
+				this.message(new_status, lines.join('\n'), result.results.some((r) => r.error) ? 'warning' : 'success');
+			}
+		}
+
+		async deleteMib(name) {
+			if (!confirm(<?= json_encode(_('Supprimer la MIB')) ?> + ' ' + name + ' ?')) {
+				return;
+			}
+
+			const result = await this.request('mibbrowser.mib.delete', {module: name});
+
+			if (result.error) {
+				alert(result.error);
+
+				return;
+			}
+
+			this.mibs_loaded = false;
+			await this.loadMibs();
+			await this.loadRoots();
+		}
+
+		/* ------------------------------------------------------------------ */
+		/* Dialogs                                                              */
+		/* ------------------------------------------------------------------ */
+
+		openDialog(dialog) {
+			if (!this.backdrop) {
+				this.backdrop = this.el('div', {class: 'mibb-backdrop'});
+				document.body.append(this.backdrop);
+			}
+
+			this.backdrop.style.display = '';
+			dialog.show();
+		}
+
+		closeDialog(dialog) {
+			dialog.close();
+			this.backdrop.style.display = 'none';
+		}
+
+		initItemDialog() {
+			const dialog = this.$('mibb-item-dialog');
+
+			this.$('mibb-item-cancel').addEventListener('click', () => this.closeDialog(dialog));
+			this.$('mibb-item-submit').addEventListener('click', () => this.submitItem());
+			this.$('mibb-item-form').addEventListener('submit', (e) => e.preventDefault());
+
+			for (const id of ['mibb-item-target-host', 'mibb-item-target-template']) {
+				this.$(id).addEventListener('change', () => {
+					this.$('mibb-item-template-row').style.display =
+						this.$('mibb-item-target-template').checked ? '' : 'none';
+				});
+			}
+		}
+
+		async openItemDialog(row) {
+			const dialog = this.$('mibb-item-dialog');
+			const result = await this.request('mibbrowser.node', {oid: row.node_oid});
+
+			if (result.error) {
+				alert(result.error);
+
+				return;
+			}
+
+			const node = result.node;
+			const index = row.index ?? '';
+			const suffix = index !== '' && index !== '0' ? '[' + index + ']' : '';
+
+			this.item_row = {oid: row.oid, node};
+
+			this.$('mibb-item-oid').textContent = row.label + '  —  get[' + row.oid + ']';
+			this.$('mibb-item-name').value = node.suggested.name + (index !== '' && index !== '0' ? ' [' + index + ']' : '');
+			this.$('mibb-item-key').value = node.name + suffix;
+			this.$('mibb-item-value-type').value = node.suggested.value_type;
+			this.$('mibb-item-units').value = node.suggested.units;
+			this.$('mibb-item-cps').checked = node.suggested.change_per_second;
+			this.$('mibb-item-cps-row').style.display = node.suggested.change_per_second ? '' : 'none';
+			this.$('mibb-item-valuemap-row').style.display = node.enum ? '' : 'none';
+			this.$('mibb-item-message').innerHTML = '';
+
+			const host_label = this.$('mibb-item-target-host-label');
+			const has_host = this.host !== null;
+
+			host_label.textContent = has_host ? <?= json_encode(_('Hôte')) ?> + ' ' + this.host.name : <?= json_encode(_('Hôte (aucun sélectionné)')) ?>;
+			this.$('mibb-item-target-host').disabled = !has_host;
+			this.$('mibb-item-target-host').checked = has_host;
+			this.$('mibb-item-target-template').checked = !has_host;
+			this.$('mibb-item-template-row').style.display = has_host ? 'none' : '';
+
+			this.openDialog(dialog);
+			this.$('mibb-item-name').focus();
+		}
+
+		async submitItem() {
+			const message = this.$('mibb-item-message');
+			let hostid = null;
+			let interfaceid = null;
+
+			if (this.$('mibb-item-target-template').checked) {
+				const data = jQuery('#mibb_item_templateid').multiSelect('getData');
+
+				if (!data.length) {
+					this.message(message, <?= json_encode(_('Choisissez un modèle.')) ?>);
+
+					return;
+				}
+
+				hostid = data[0].id;
+			}
+			else {
+				hostid = this.host.hostid;
+				interfaceid = this.$('mibb-interface').value || null;
+			}
+
+			this.$('mibb-item-submit').disabled = true;
+
+			const result = await this.request('mibbrowser.item.create', {
+				hostid,
+				interfaceid,
+				oid: this.item_row.oid,
+				name: this.$('mibb-item-name').value,
+				key: this.$('mibb-item-key').value,
+				value_type: this.$('mibb-item-value-type').value,
+				delay: this.$('mibb-item-delay').value,
+				units: this.$('mibb-item-units').value,
+				change_per_second: this.$('mibb-item-cps').checked ? 1 : 0,
+				create_valuemap: this.$('mibb-item-valuemap').checked && this.item_row.node.enum ? 1 : 0
+			});
+
+			this.$('mibb-item-submit').disabled = false;
+
+			if (result.error) {
+				this.message(message, result.error);
+
+				return;
+			}
+
+			message.innerHTML = '';
+			message.append(this.el('div', {class: 'mibb-msg mibb-msg-success'},
+				result.message + ' ',
+				this.el('a', {href: result.url, target: '_blank', text: <?= json_encode(_('Voir les éléments')) ?>})
+			));
+		}
+
+		initTemplateDialog() {
+			const dialog = this.$('mibb-tpl-dialog');
+
+			this.$('mibb-tpl-cancel').addEventListener('click', () => this.closeDialog(dialog));
+			this.$('mibb-tpl-form').addEventListener('submit', (e) => e.preventDefault());
+			this.$('mibb-tpl-preview-btn').addEventListener('click', () => this.generateTemplate('preview'));
+			this.$('mibb-tpl-yaml').addEventListener('click', () => this.generateTemplate('yaml'));
+			this.$('mibb-tpl-import').addEventListener('click', () => this.generateTemplate('import'));
+		}
+
+		openTemplateDialog(roots, node = null) {
+			const dialog = this.$('mibb-tpl-dialog');
+			const label = node ? (node.module && node.name !== node.module ? node.module + '::' + node.name : node.name) : roots.join(', ');
+			const base = node ? (node.name === node.module ? node.module : node.name) : 'SNMP device';
+
+			this.template_roots = roots;
+			this.$('mibb-tpl-roots').textContent = <?= json_encode(_('Source : ')) ?> + label;
+			this.$('mibb-tpl-name').value = base + ' by SNMP';
+			this.$('mibb-tpl-preview').innerHTML = '';
+			this.$('mibb-tpl-message').innerHTML = '';
+
+			const has_host = this.host !== null;
+
+			this.$('mibb-tpl-link').disabled = !has_host;
+			this.$('mibb-tpl-link').checked = false;
+			this.$('mibb-tpl-link-label').textContent = has_host
+				? <?= json_encode(_('Lier le modèle à l\'hôte')) ?> + ' ' + this.host.name + ' ' + <?= json_encode(_('après l\'import')) ?>
+				: <?= json_encode(_('Lier le modèle à un hôte (sélectionnez d\'abord un hôte)')) ?>;
+
+			this.openDialog(dialog);
+			this.$('mibb-tpl-name').focus();
+		}
+
+		async generateTemplate(mode) {
+			const message = this.$('mibb-tpl-message');
+			const params = {
+				roots: this.template_roots,
+				template: this.$('mibb-tpl-name').value.trim(),
+				group: this.$('mibb-tpl-group').value.trim(),
+				key_prefix: this.$('mibb-tpl-prefix').value.trim(),
+				delay: this.$('mibb-tpl-delay').value.trim(),
+				walk_delay: this.$('mibb-tpl-walk-delay').value.trim(),
+				include_scalars: this.$('mibb-tpl-scalars').checked ? 1 : 0,
+				include_tables: this.$('mibb-tpl-tables').checked ? 1 : 0,
+				change_per_second: this.$('mibb-tpl-cps').checked ? 1 : 0,
+				mode
+			};
+
+			if (mode === 'import' && this.$('mibb-tpl-link').checked && this.host !== null) {
+				params.link_hostid = this.host.hostid;
+			}
+
+			this.message(message, <?= json_encode(_('Génération…')) ?>, 'info');
+
+			const result = await this.request('mibbrowser.template.generate', params);
+
+			if (result.error) {
+				this.message(message, result.error);
+
+				return;
+			}
+
+			this.renderTemplateSummary(result.summary);
+
+			if (mode === 'yaml') {
+				this.download(result.filename, result.content, result.mime);
+				this.message(message, <?= json_encode(_('Fichier téléchargé : ')) ?> + result.filename, 'success');
+			}
+			else if (mode === 'import') {
+				message.innerHTML = '';
+				message.append(this.el('div', {class: 'mibb-msg mibb-msg-success'},
+					result.message + ' ',
+					this.el('a', {href: result.url, target: '_blank', text: <?= json_encode(_('Ouvrir le modèle')) ?>})
+				));
+			}
+			else {
+				message.innerHTML = '';
+			}
+		}
+
+		renderTemplateSummary(summary) {
+			const box = this.$('mibb-tpl-preview');
+			box.innerHTML = '';
+
+			box.append(this.el('div', {class: 'mibb-tpl-counts', text:
+				summary.items.length + ' ' + <?= json_encode(_('élément(s)')) ?> + ', '
+				+ summary.discovery_rules.length + ' ' + <?= json_encode(_('règle(s) de découverte')) ?> + ', '
+				+ summary.prototype_count + ' ' + <?= json_encode(_('prototype(s)')) ?> + ', '
+				+ summary.valuemaps + ' ' + <?= json_encode(_('table(s) de correspondance')) ?>
+			}));
+
+			const list = this.el('ul', {class: 'mibb-tpl-list'});
+
+			for (const item of summary.items) {
+				list.append(this.el('li', {}, this.el('b', {text: item.name}), ' — ',
+					this.el('span', {class: 'mibb-mono', text: item.key + '  ' + item.oid})
+				));
+			}
+
+			for (const rule of summary.discovery_rules) {
+				const sub = this.el('ul');
+
+				for (const prototype of rule.prototypes) {
+					sub.append(this.el('li', {}, prototype.name + ' — ',
+						this.el('span', {class: 'mibb-mono', text: prototype.key})
+					));
+				}
+
+				list.append(this.el('li', {}, this.el('b', {text: rule.name}), ' — ',
+					this.el('span', {class: 'mibb-mono', text: rule.key}), sub
+				));
+			}
+
+			box.append(list);
+		}
+	};
+</script>

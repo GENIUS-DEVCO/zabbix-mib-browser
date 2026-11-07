@@ -1,0 +1,5 @@
+# Runtime data (uploaded MIBs and cache) - kept out of the repository
+data/mibs/*
+!data/mibs/.gitkeep
+data/cache/*
+!data/cache/.gitkeep

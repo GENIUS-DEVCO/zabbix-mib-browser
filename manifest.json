@@ -1,0 +1,62 @@
+{
+	"manifest_version": 2.0,
+	"id": "mibbrowser",
+	"name": "MIB Browser",
+	"namespace": "MibBrowser",
+	"version": "1.0.0",
+	"author": "GENIUS-DEVCO",
+	"url": "https://github.com/GENIUS-DEVCO/zabbix-mib-browser",
+	"description": "SNMP MIB browser for Zabbix 8.0: load MIB files, walk/get SNMP hosts through Zabbix server or proxy, create items in one click and generate templates.",
+	"actions": {
+		"mibbrowser.view": {
+			"class": "MibBrowserView",
+			"view": "mibbrowser.view",
+			"layout": "layout.htmlpage"
+		},
+		"mibbrowser.tree": {
+			"class": "Tree",
+			"layout": "layout.json"
+		},
+		"mibbrowser.node": {
+			"class": "Node",
+			"layout": "layout.json"
+		},
+		"mibbrowser.interfaces": {
+			"class": "Interfaces",
+			"layout": "layout.json"
+		},
+		"mibbrowser.query": {
+			"class": "Query",
+			"layout": "layout.json"
+		},
+		"mibbrowser.mibs": {
+			"class": "MibList",
+			"layout": "layout.json"
+		},
+		"mibbrowser.mib.upload": {
+			"class": "MibUpload",
+			"layout": "layout.json"
+		},
+		"mibbrowser.mib.delete": {
+			"class": "MibDelete",
+			"layout": "layout.json"
+		},
+		"mibbrowser.item.create": {
+			"class": "ItemCreate",
+			"layout": "layout.json"
+		},
+		"mibbrowser.template.generate": {
+			"class": "TemplateGenerate",
+			"layout": "layout.json"
+		}
+	},
+	"assets": {
+		"css": ["mibbrowser.css"],
+		"js": []
+	},
+	"config": {
+		"data_dir": "",
+		"max_upload_size": 5242880,
+		"max_results": 5000
+	}
+}
