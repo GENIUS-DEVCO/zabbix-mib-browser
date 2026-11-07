@@ -3,7 +3,7 @@
 	"id": "mibbrowser",
 	"name": "MIB Browser",
 	"namespace": "MibBrowser",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"author": "GENIUS-DEVCO",
 	"url": "https://github.com/GENIUS-DEVCO/zabbix-mib-browser",
 	"description": "SNMP MIB browser for Zabbix 8.0: load MIB files, walk/get SNMP hosts through Zabbix server or proxy, create items in one click and generate templates.",
