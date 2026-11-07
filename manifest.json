@@ -3,10 +3,10 @@
 	"id": "mibbrowser",
 	"name": "MIB Browser",
 	"namespace": "MibBrowser",
-	"version": "1.2.0",
+	"version": "1.3.0",
 	"author": "GENIUS-DEVCO",
 	"url": "https://github.com/GENIUS-DEVCO/zabbix-mib-browser",
-	"description": "SNMP MIB browser for Zabbix 8.0: load MIB files, walk/get SNMP hosts through Zabbix server or proxy, create items in one click and generate templates.",
+	"description": "SNMP MIB browser for Zabbix 8.0: load MIB files, walk/get SNMP hosts through Zabbix server or proxy, create items in one click, generate templates and import/export walks, templates and MIBs.",
 	"actions": {
 		"mibbrowser.view": {
 			"class": "MibBrowserView",
@@ -60,6 +60,22 @@
 		"mibbrowser.settings": {
 			"class": "Settings",
 			"layout": "layout.json"
+		},
+		"mibbrowser.results.export": {
+			"class": "ResultsExport",
+			"layout": "layout.json"
+		},
+		"mibbrowser.walk.import": {
+			"class": "WalkImport",
+			"layout": "layout.json"
+		},
+		"mibbrowser.mib.export": {
+			"class": "MibExport",
+			"layout": "layout.json"
+		},
+		"mibbrowser.tree.export": {
+			"class": "TreeExport",
+			"layout": "layout.json"
 		}
 	},
 	"assets": {
@@ -70,6 +86,8 @@
 		"data_dir": "",
 		"max_upload_size": 5242880,
 		"max_results": 5000,
+		"max_walk_size": 20971520,
+		"max_archive_size": 52428800,
 		"snmp_security": "warn"
 	}
 }

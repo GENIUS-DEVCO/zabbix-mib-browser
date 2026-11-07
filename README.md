@@ -7,7 +7,8 @@ Le module ajoute un écran **Data collection → MIB browser** qui permet :
 - de **charger des fichiers MIB** (standards fournis, ou MIB constructeurs ajoutées par un administrateur) et de parcourir l'arbre des objets avec leurs noms, types, descriptions et valeurs énumérées ;
 - d'**interroger un hôte** en SNMP (`get` et `walk`) avec les identifiants déjà configurés sur son interface SNMP (v1, v2c, v3), **en passant par le serveur Zabbix ou par le proxy de l'hôte** ;
 - de **créer un élément en un clic** à partir d'une valeur trouvée, sur l'hôte ou sur un modèle ;
-- de **générer un modèle Zabbix 8.0 complet** à partir d'une MIB ou d'une partie de l'arbre, puis de le télécharger en YAML ou de l'importer directement (et de le lier à l'hôte).
+- de **générer un modèle Zabbix 8.0 complet** à partir d'une MIB ou d'une partie de l'arbre, puis de le télécharger en YAML, XML ou JSON ou de l'importer directement (et de le lier à l'hôte) ;
+- d'**importer et d'exporter** : résultats en CSV, Excel, JSON, XML ou texte snmpwalk, fichiers de walk ouverts **sans accès à l'équipement**, MIB en lot depuis une archive, export des MIB et des branches de l'arbre.
 
 ![Walk d'une table](docs/screenshots/01-walk.png)
 
@@ -18,13 +19,14 @@ Le module ajoute un écran **Data collection → MIB browser** qui permet :
 | **Arbre MIB** | Chargement progressif, recherche par nom ou par OID, badges par type d'objet (table, ligne, colonne, scalaire, notification…). |
 | **Détails d'un objet** | Syntaxe et type de base (conventions textuelles résolues), accès, statut, unités, index, valeurs énumérées, description. |
 | **Tester la connexion** | Un clic lit le groupe *system* de l'équipement (nom, description, constructeur, modèle, uptime, emplacement) avec le temps de réponse et le niveau de chiffrement. En cas d'échec, un **diagnostic** explique la cause probable et quoi vérifier : communauté, utilisateur SNMPv3, phrase d'authentification ou de chiffrement, niveau de sécurité, DNS, réseau/pare-feu, proxy, hôte pas encore chargé par le serveur. |
-| **Get / Walk** | Résultats traduits en noms MIB (`IF-MIB::ifInOctets.3`), valeurs mises en forme (énumérations, adresses MAC, durées, dates), filtre, export CSV. |
+| **Get / Walk** | Résultats traduits en noms MIB (`IF-MIB::ifInOctets.3`), valeurs mises en forme (énumérations, adresses MAC, durées, dates), filtre, export **CSV, Excel (.xlsx), JSON, XML ou texte snmpwalk**. |
+| **Import d'un walk** | Ouvrir un fichier de walk (sortie `snmpwalk` numérique ou symbolique, exports du module, `.gz` ou `.zip`) pour parcourir un équipement **hors ligne**, créer des éléments ou **générer un modèle** limité aux objets présents dans le fichier. |
 | **Identifiants** | Ceux de l'interface SNMP de l'hôte, macros utilisateur résolues. Si l'interface utilise une **macro secrète**, le module demande la valeur pour la requête (elle n'est jamais enregistrée). |
 | **Création d'élément** | Élément SNMP `get[OID]` avec type d'information, unités, prétraitement (« Change per second » pour les compteurs, multiplicateur pour les TimeTicks) et **table de correspondance** créée depuis l'énumération MIB. |
-| **Génération de modèle** | Même approche que les modèles officiels Zabbix 8.0 : `get[]` pour les scalaires ; pour chaque table un élément maître `walk[]`, une **découverte LLD** dépendante (« SNMP walk to JSON ») et des **prototypes** dépendants (« SNMP walk value »). UUID stables : réimporter met à jour le même modèle. |
+| **Génération de modèle** | Même approche que les modèles officiels Zabbix 8.0 : `get[]` pour les scalaires ; pour chaque table un élément maître `walk[]`, une **découverte LLD** dépendante (« SNMP walk to JSON ») et des **prototypes** dépendants (« SNMP walk value »). UUID stables : réimporter met à jour le même modèle. Téléchargement en **YAML, XML ou JSON** (les trois formats d'import de Zabbix). |
 | **Sécurité SNMP** | L'interface **SNMPv3 chiffrée (authPriv)** est choisie par défaut ; un badge indique le niveau de sécurité de l'interface utilisée ; les requêtes en clair (SNMPv1/v2c, SNMPv3 sans chiffrement) sont signalées ; un onglet dresse l'état de tous les hôtes SNMP ; une politique peut **exiger le chiffrement**. |
 | **Langues** | L'interface du module suit la **langue du profil Zabbix** de l'utilisateur : les 25 langues proposées par Zabbix 8.0 sont prises en charge. |
-| **Gestion des MIB** | Ajout de fichiers par un Super administrateur, détection des **dépendances manquantes**, suppression des MIB ajoutées. |
+| **Gestion des MIB** | Ajout de fichiers ou d'**archives (.zip, .tar, .tar.gz)** par un Super administrateur, détection des **dépendances manquantes**, suppression des MIB ajoutées, téléchargement d'une MIB, des MIB ajoutées ou de toutes les MIB (.zip), export des objets d'un module ou d'une branche (CSV, Excel, JSON). |
 
 | Détails d'un objet | Création d'un élément |
 |---|---|
@@ -39,6 +41,12 @@ Le module ajoute un écran **Data collection → MIB browser** qui permet :
 | ![Test OK](docs/screenshots/07-test-ok.png) | ![Test KO](docs/screenshots/08-test-ko.png) |
 
 ![Sécurité SNMP](docs/screenshots/06-security.png)
+
+| Walk importé depuis un fichier | Modèle en YAML, XML ou JSON |
+|---|---|
+| ![Import](docs/screenshots/10-import-walk.png) | ![Formats](docs/screenshots/11-template-formats.png) |
+
+![Archive de MIB](docs/screenshots/12-mib-archive.png)
 
 ![Interface en japonais](docs/screenshots/09-i18n-ja.png)
 
@@ -95,6 +103,42 @@ location ~ ^/modules/mibbrowser/data/ {
 4. Dans les résultats, **+ Élément** crée un élément pour l'instance choisie ; **Générer un modèle** crée un modèle pour le sous-arbre interrogé.
 5. Onglet **MIB chargées** : ajouter des fichiers MIB constructeurs. Si une MIB dépend d'autres modules (par exemple `CISCO-SMI`, `CISCO-TC`), la colonne « État » les indique : il suffit de les ajouter aussi, la résolution se fait automatiquement.
 
+## Import et export
+
+### Résultats (Get / Walk)
+
+Le menu **Exporter…** des résultats propose :
+
+| Format | Contenu | Réimportable |
+|---|---|---|
+| CSV | OID, nom, type, valeur affichée, valeur brute, type SNMP (séparateur `;`, UTF-8 avec BOM pour Excel) | oui |
+| Excel (.xlsx) | Feuille « SNMP » avec filtre et en-tête figé (les compteurs restent des nombres) et feuille « Info » (hôte, requête, date) | non |
+| JSON | Hôte, requête, date et valeurs | oui |
+| XML | Même contenu que le JSON | oui |
+| Texte snmpwalk | Format `snmpwalk -On` (`.1.3.6… = STRING: "…"`), identique aux valeurs `walk[]` de Zabbix | oui |
+
+### Import d'un walk (hors ligne)
+
+Le bouton **Importer un walk** ouvre un fichier et affiche ses valeurs comme un walk, sans interroger d'équipement : pratique pour un équipement inaccessible depuis Zabbix, un walk fourni par un client ou un constructeur, ou pour préparer un modèle avant la mise en service.
+
+Formats reconnus automatiquement :
+
+- sortie de `snmpwalk` (Net-SNMP) : numérique (`-On`), `iso.3.6…` (sans MIB), symbolique (`IF-MIB::ifDescr.2`, `-OX` avec `[index]`), index texte (`vacmGroupName.3."admin"`) ou énumérés (`.authPriv`), valeurs `Timeticks: (123) 0:00:01.23`, `INTEGER: up(1)`, unités, `Hex-STRING` sur plusieurs lignes ;
+- exports CSV, JSON, XML et snmpwalk du module ;
+- fichiers compressés `.gz` ou `.zip` (le fichier le plus gros de l'archive).
+
+Les noms symboliques sont résolus avec les MIB chargées : chargez d'abord les MIB du constructeur. Les lignes non reconnues sont comptées et montrées en exemple. Depuis un walk importé, **Générer un modèle** ne garde que les objets et les colonnes présents dans le fichier. Le fichier n'est pas conservé sur le serveur.
+
+### Modèles
+
+Le modèle généré se télécharge en **YAML, XML ou JSON** ; les trois fichiers s'importent dans Zabbix (*Data collection → Templates → Import*) et donnent exactement le même modèle.
+
+### MIB
+
+- **Ajout en lot** : un Super admin peut envoyer une archive `.zip`, `.tar`, `.tar.gz` ou `.tgz` de MIB (par exemple le paquet de MIB d'un constructeur). Les fichiers qui ne contiennent pas de module MIB (README, PDF, métadonnées macOS…) sont ignorés. Les archives sont lues en PHP, sans extension `zip`, avec des limites de taille contre les archives piégées.
+- **Téléchargement** : une MIB (bouton *Fichier*), les MIB ajoutées ou toutes les MIB en `.zip`.
+- **Export des objets** d'un module (bouton *CSV*) ou d'une branche de l'arbre (menu *Exporter la branche…* des détails) en CSV, Excel ou JSON : OID, module, nom, type, syntaxe, accès, statut, unités, index, valeurs énumérées, description.
+
 ## Sécurité SNMP et chiffrement
 
 SNMPv1 et SNMPv2c envoient la communauté et toutes les valeurs **en clair** sur le réseau. Seul **SNMPv3 avec le niveau `authPriv`** chiffre les échanges. Le module en tient compte :
@@ -133,7 +177,11 @@ Les options se trouvent dans `manifest.json`, section `config` :
 | `data_dir` | `""` (= `<module>/data`) | Dossier des MIB ajoutées et du cache, accessible en écriture par le serveur web. |
 | `max_upload_size` | `5242880` | Taille maximale d'un fichier MIB (octets). |
 | `max_results` | `5000` | Nombre maximal de lignes affichées pour un walk. |
+| `max_walk_size` | `20971520` | Taille maximale d'un fichier de walk importé (octets). |
+| `max_archive_size` | `52428800` | Taille maximale d'une archive de MIB (octets). |
 | `snmp_security` | `warn` | `warn` ou `require_encryption`. Se règle depuis l'onglet **Sécurité SNMP**. |
+
+Les limites d'envoi de PHP s'appliquent aussi (`upload_max_filesize`, `post_max_size`).
 
 Zabbix copie ces options dans sa base de données lors de l'activation du module : modifier `manifest.json` ensuite n'a pas d'effet. La politique de sécurité se change dans l'onglet Sécurité SNMP ; pour les autres options, utilisez l'API (`module.update`) ou réactivez le module après l'avoir supprimé de la liste des modules.
 
@@ -173,6 +221,9 @@ Navigateur ──► Module (PHP, interface Zabbix) ──► Serveur Zabbix ─
 - `lib/ZabbixSnmp.php` : requêtes via le serveur Zabbix, résolution des macros des identifiants, choix du proxy.
 - `lib/SnmpSecurity.php` : niveau de sécurité des interfaces (chiffrement SNMPv3, algorithmes) et politique.
 - `lib/ItemMapper.php`, `lib/TemplateBuilder.php`, `lib/YamlWriter.php` : correspondance MIB → éléments et génération des modèles.
+- `lib/WalkImporter.php` : lecture des fichiers de walk (Net-SNMP et exports du module).
+- `lib/ResultExporter.php`, `lib/TreeExporter.php`, `lib/ZabbixXmlWriter.php` : exports des résultats, des branches et des modèles.
+- `lib/ZipWriter.php`, `lib/ArchiveReader.php`, `lib/XlsxWriter.php` : ZIP, TAR/GZIP et Excel en PHP, sans extension supplémentaire.
 - `lib/I18n.php` et `lang/` : traductions de l'interface du module.
 
 ## MIB fournies
@@ -191,7 +242,7 @@ Le dossier `mibs/` contient 43 MIB standards (IETF et Net-SNMP) : SNMPv2, IF-MIB
 php tests/run.php
 ```
 
-Les tests couvrent l'analyse des MIB, la résolution des OID, la lecture des réponses `walk[]` (exemples réels du serveur Zabbix 8.0), la correspondance MIB → élément, la génération de modèles et la complétude des traductions. Ils tournent automatiquement sur GitHub Actions (PHP 8.2, 8.3 et 8.4).
+Les tests couvrent l'analyse des MIB, la résolution des OID, la lecture des réponses `walk[]` (exemples réels du serveur Zabbix 8.0), la correspondance MIB → élément, la génération de modèles, l'import de walks réels (snmpwalk numérique, symbolique, `-OX`, `iso.`, index texte et énumérés), les exports et leur réimport, les archives, les fichiers Excel, les modèles XML et la complétude des traductions. Ils tournent automatiquement sur GitHub Actions (PHP 8.2, 8.3 et 8.4).
 
 Le module a aussi été testé de bout en bout sur un Zabbix 8.0.0 compilé depuis les sources, avec un agent Net-SNMP en SNMPv2c et SNMPv3 (authPriv) : walk, création d'éléments, import de modèles et découverte LLD avec collecte des valeurs.
 

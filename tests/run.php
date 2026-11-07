@@ -17,19 +17,28 @@ function _s($format, ...$args) {
 
 $root = dirname(__DIR__);
 
-foreach (['I18n', 'MibParser', 'MibRepository', 'SnmpResult', 'ItemMapper', 'TemplateBuilder', 'YamlWriter', 'SnmpSecurity', 'ConnectionDiagnosis'] as $class) {
+foreach (['I18n', 'MibParser', 'MibRepository', 'SnmpResult', 'ItemMapper', 'TemplateBuilder', 'YamlWriter', 'SnmpSecurity',
+		'ConnectionDiagnosis', 'ZipWriter', 'ArchiveReader', 'XlsxWriter', 'ResultExporter', 'WalkImporter',
+		'ZabbixXmlWriter', 'TreeExporter'] as $class) {
 	require $root.'/lib/'.$class.'.php';
 }
 
-use Modules\MibBrowser\Lib\ConnectionDiagnosis,
+use Modules\MibBrowser\Lib\ArchiveReader,
+	Modules\MibBrowser\Lib\ConnectionDiagnosis,
 	Modules\MibBrowser\Lib\I18n,
 	Modules\MibBrowser\Lib\ItemMapper,
 	Modules\MibBrowser\Lib\MibParser,
 	Modules\MibBrowser\Lib\MibRepository,
 	Modules\MibBrowser\Lib\SnmpResult,
 	Modules\MibBrowser\Lib\SnmpSecurity,
+	Modules\MibBrowser\Lib\ResultExporter,
 	Modules\MibBrowser\Lib\TemplateBuilder,
-	Modules\MibBrowser\Lib\YamlWriter;
+	Modules\MibBrowser\Lib\TreeExporter,
+	Modules\MibBrowser\Lib\WalkImporter,
+	Modules\MibBrowser\Lib\XlsxWriter,
+	Modules\MibBrowser\Lib\YamlWriter,
+	Modules\MibBrowser\Lib\ZabbixXmlWriter,
+	Modules\MibBrowser\Lib\ZipWriter;
 
 // The expectations below are written for the French catalog; English and the other catalogs are checked at the end.
 I18n::setLocale('fr_FR');
@@ -364,6 +373,158 @@ YAML;
 check('yaml: output', $yaml, $expected);
 check('yaml: quoting', [YamlWriter::scalar('yes'), YamlWriter::scalar("it's"), YamlWriter::scalar('plain text')],
 	["'yes'", "'it''s'", 'plain text']
+);
+
+
+/* Import of walk files --------------------------------------------------------------------------------------------- */
+
+$importer = new WalkImporter($repository);
+$fixtures = $root.'/tests/fixtures';
+
+// Each Net-SNMP output style gives the same OIDs as the numeric walk of the same device ("-On -Ot -Oe").
+foreach (['sym-if' => 'symbolic', 'ox' => 'symbolic -OX', 'iso' => 'iso. without MIBs', 'vacm' => 'string and enum indexes']
+		as $name => $label) {
+	$records = $importer->import(file_get_contents($fixtures.'/snmpwalk-'.$name.'.txt'));
+	$reference = SnmpResult::parseWalk(file_get_contents($fixtures.'/snmpwalk-'.$name.'.num'));
+
+	check('walk import: '.$label.' OIDs', array_column($records, 'oid'), array_column($reference, 'oid'));
+	check('walk import: '.$label.' nothing skipped', $importer->getSkippedCount(), 0);
+}
+
+check('walk import: format detection', [
+	WalkImporter::detect('.1.3.6.1.2.1.1.5.0 = STRING: "x"'), WalkImporter::detect("{\n\"values\": []}"),
+	WalkImporter::detect("OID;Name;Type\n"), WalkImporter::detect('<?xml version="1.0"?><snmp_results/>')
+], ['snmpwalk', 'json', 'csv', 'xml']);
+
+check('walk import: Net-SNMP values', array_map([$importer, 'normalizeValue'], [
+	'Timeticks: (12345) 0:02:03.45', 'INTEGER: up(1)', 'INTEGER: 4096 Bytes', 'Gauge32: 1000000000 bits per second',
+	'OID: SNMPv2-MIB::snmpMIB', 'OID: iso.3.6.1.4.1.8072.3.2.10', "Hex-STRING: 00 0C 29 \n3A 4B 5C ",
+	'BITS: 40 00 lowerLayerDown(1)', 'STRING: "quoted \"x\""', '""'
+]), [
+	['type' => 'Timeticks', 'raw' => '12345'], ['type' => 'INTEGER', 'raw' => '1'], ['type' => 'INTEGER', 'raw' => '4096'],
+	['type' => 'Gauge32', 'raw' => '1000000000'], ['type' => 'OID', 'raw' => '1.3.6.1.6.3.1'],
+	['type' => 'OID', 'raw' => '1.3.6.1.4.1.8072.3.2.10'], ['type' => 'Hex-STRING', 'raw' => '00 0C 29 3A 4B 5C'],
+	['type' => 'Hex-STRING', 'raw' => '40 00'], ['type' => 'STRING', 'raw' => 'quoted "x"'], ['type' => 'STRING', 'raw' => '']
+]);
+
+check('walk import: OID forms', array_map([$importer, 'resolveOid'], [
+	'.1.3.6.1.2.1.1.5.0', 'iso.3.6.1.2.1.1.5.0', 'SNMPv2-MIB::sysName.0', 'sysName.0', 'IF-MIB::ifDescr[3]',
+	'SNMP-VIEW-BASED-ACM-MIB::vacmGroupName.3."zbxv3"', 'SNMP-VIEW-BASED-ACM-MIB::vacmAccessStatus."grp"."".3.authPriv',
+	'UNKNOWN-MIB::nothing.1'
+]), [
+	'1.3.6.1.2.1.1.5.0', '1.3.6.1.2.1.1.5.0', '1.3.6.1.2.1.1.5.0', '1.3.6.1.2.1.1.5.0', '1.3.6.1.2.1.2.2.1.2.3',
+	'1.3.6.1.6.3.16.1.2.1.3.3.5.122.98.120.118.51', '1.3.6.1.6.3.16.1.4.1.9.3.103.114.112.0.3.3', null
+]);
+
+$records = $importer->import("Some header\nSNMPv2-MIB::sysName.0 = STRING: box\nFOO-MIB::fooBar.0 = INTEGER: 1\n");
+check('walk import: unknown objects skipped', [count($records), $importer->getSkippedCount()], [1, 2]);
+
+/* Export of results and round trip --------------------------------------------------------------------------------- */
+
+$walk = SnmpResult::parseWalk(file_get_contents($fixtures.'/walk-iftable.txt'));
+$rows = SnmpResult::buildRows($walk, $repository);
+$expected = array_map(static fn($r) => [$r['oid'], $r['type'], $r['raw']], $walk);
+
+foreach (['json', 'csv', 'xml', 'snmpwalk'] as $format) {
+	$file = ResultExporter::export($format, $rows, ['host' => 'sw-1', 'request' => 'walk[1.3.6.1.2.1.2.2]']);
+	$back = $importer->import($file['content']);
+
+	check('export: '.$format.' imported back', array_map(static fn($r) => [$r['oid'], $r['raw']], $back),
+		array_map(static fn($r) => [$r[0], $r[2]], $expected)
+	);
+	check('export: '.$format.' same display', array_column(SnmpResult::buildRows($back, $repository), 'value'),
+		array_column($rows, 'value')
+	);
+}
+
+$json = json_decode(ResultExporter::export('json', $rows, ['host' => 'sw-1'])['content'], true);
+check('export: json metadata', [$json['host'], count($json['values']), array_keys($json['values'][0])],
+	['sw-1', count($rows), ['oid', 'name', 'type', 'value', 'raw', 'snmp_type']]
+);
+check('export: snmpwalk line', ResultExporter::snmpwalkValue(['oid' => '1', 'type' => 'TimeTicks', 'raw' => '42', 'snmp_type' => '']),
+	'Timeticks: 42'
+);
+
+$xml = new DOMDocument();
+check('export: xml well-formed', $xml->loadXML(ResultExporter::export('xml', $rows)['content']), true);
+
+/* ZIP, archives and Excel ------------------------------------------------------------------------------------------- */
+
+$zip = new ZipWriter();
+$zip->add('dir/A.mib', str_repeat("A-MIB DEFINITIONS ::= BEGIN\n", 50));
+$zip->add('été.txt', 'small');
+$reader = new ArchiveReader(1048576, 10485760);
+check('zip: round trip', $reader->read($zip->build()), [
+	'dir/A.mib' => str_repeat("A-MIB DEFINITIONS ::= BEGIN\n", 50), 'été.txt' => 'small'
+]);
+
+foreach (['acme-mibs.zip', 'acme-mibs.tar.gz'] as $archive) {
+	$files = (new ArchiveReader(1048576, 10485760))->read(file_get_contents($fixtures.'/'.$archive), $archive);
+	ksort($files);
+	check('archive: '.$archive, array_keys($files), [
+		'acme/ACME-SMI.my', 'acme/ACME-SYSTEM-MIB.mib', 'acme/README.txt', 'acme/__MACOSX/._ACME-SMI.my',
+		'acme/docs/manual.pdf'
+	]);
+}
+
+$small = new ArchiveReader(100, 1000);
+$files = $small->read($zip->build());
+check('archive: size limit', [array_keys($files), $small->getWarnings()[0]['reason'] ?? ''], [['été.txt'], 'too_large']);
+check('archive: not an archive', [ArchiveReader::detect('plain text'), (new ArchiveReader(10, 10))->read('plain')],
+	[null, null]
+);
+check('archive: single .gz', (new ArchiveReader(1000, 1000))->read(gzencode('walk data'), 'switch.txt.gz'),
+	['switch.txt' => 'walk data']
+);
+
+$xlsx = (new ArchiveReader(10485760, 10485760))->read(ResultExporter::export('xlsx', $rows, ['host' => 'sw-1'])['content']);
+check('xlsx: parts', array_keys($xlsx), ['[Content_Types].xml', '_rels/.rels', 'docProps/core.xml', 'docProps/app.xml',
+	'xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml', 'xl/workbook.xml', 'xl/_rels/workbook.xml.rels',
+	'xl/styles.xml'
+]);
+$sheet = new DOMDocument();
+check('xlsx: sheet well-formed', $sheet->loadXML($xlsx['xl/worksheets/sheet1.xml']), true);
+check('xlsx: rows', $sheet->getElementsByTagName('row')->length, count($rows) + 1);
+check('xlsx: column names', [XlsxWriter::column(0), XlsxWriter::column(25), XlsxWriter::column(26), XlsxWriter::column(701)],
+	['A', 'Z', 'AA', 'ZZ']
+);
+check('xlsx: XML escaping', XlsxWriter::esc("a<b>&\x01\"c"), 'a&lt;b&gt;&amp;&quot;c');
+
+/* Templates in XML and branch export -------------------------------------------------------------------------------- */
+
+$builder = new TemplateBuilder($repository, ['template' => 'IF test']);
+$export = $builder->build(['1.3.6.1.2.1.2.2']);
+$dom = new DOMDocument();
+check('template xml: well-formed', $dom->loadXML(ZabbixXmlWriter::write($export)), true);
+$xpath = new DOMXPath($dom);
+check('template xml: layout', [
+	$xpath->evaluate('string(/zabbix_export/version)'),
+	$xpath->query('/zabbix_export/templates/template/items/item')->length,
+	$xpath->query('/zabbix_export/templates/template/discovery_rules/discovery_rule/item_prototypes/item_prototype')->length,
+	$xpath->query('//item_prototype/preprocessing/step/parameters/parameter')->length > 0,
+	$xpath->query('/zabbix_export/templates/template/valuemaps/valuemap/mappings/mapping')->length > 0,
+	$xpath->evaluate('string(/zabbix_export/templates/template/groups/group/name)')
+], [
+	'8.0', count($export['zabbix_export']['templates'][0]['items']),
+	count($export['zabbix_export']['templates'][0]['discovery_rules'][0]['item_prototypes']), true, true,
+	'Templates/SNMP'
+]);
+
+$columns = ['1.3.6.1.2.1.2.2.1.2', '1.3.6.1.2.1.2.2.1.8'];
+$export = (new TemplateBuilder($repository, ['template' => 'IF test']))->build(['1.3.6.1.2.1.2.2.1'], $columns);
+check('template: columns of an imported walk only',
+	count($export['zabbix_export']['templates'][0]['discovery_rules'][0]['item_prototypes']), 2
+);
+
+$tree = TreeExporter::export('csv', $repository->getSubtree('1.3.6.1.2.1.2.2'), 'IF-MIB-ifTable');
+$lines = explode("\r\n", trim($tree['content']));
+check('tree export: csv', [$tree['filename'], count($lines), substr($lines[0], 3, 12)],
+	['mib-IF-MIB-ifTable.csv', count($repository->getSubtree('1.3.6.1.2.1.2.2')) + 1, 'oid;module;n']
+);
+$tree = json_decode(TreeExporter::export('json', $repository->getModuleNodes('IF-MIB'), 'IF-MIB')['content'], true);
+$status = array_values(array_filter($tree['objects'], static fn($o) => $o['name'] === 'ifOperStatus'))[0];
+check('tree export: json', [$tree['root'], $status['oid'], $status['kind'], substr($status['enum'], 0, 13)],
+	['IF-MIB', '1.3.6.1.2.1.2.2.1.8', 'column', 'up(1), down(2']
 );
 
 // Cleanup.

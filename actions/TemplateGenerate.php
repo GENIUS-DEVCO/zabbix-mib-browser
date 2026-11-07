@@ -1,7 +1,7 @@
 <?php declare(strict_types = 0);
 /*
 ** MIB Browser module for Zabbix 8.0
-** Generate a Zabbix 8.0 template from MIB objects: preview, download (YAML/JSON) or direct import.
+** Generate a Zabbix 8.0 template from MIB objects: preview, download (YAML/XML/JSON) or direct import.
 */
 
 namespace Modules\MibBrowser\Actions;
@@ -12,7 +12,8 @@ use API,
 	CUrl,
 	Modules\MibBrowser\Lib\Storage,
 	Modules\MibBrowser\Lib\TemplateBuilder,
-	Modules\MibBrowser\Lib\YamlWriter;
+	Modules\MibBrowser\Lib\YamlWriter,
+	Modules\MibBrowser\Lib\ZabbixXmlWriter;
 
 class TemplateGenerate extends BaseJson {
 
@@ -27,7 +28,8 @@ class TemplateGenerate extends BaseJson {
 			'change_per_second' => 'in 0,1',
 			'include_scalars' => 'in 0,1',
 			'include_tables' => 'in 0,1',
-			'mode' => 'required|in preview,yaml,json,import',
+			'mode' => 'required|in preview,yaml,xml,json,import',
+			'columns' => 'array',
 			'link_hostid' => 'db hosts.hostid'
 		]);
 	}
@@ -62,7 +64,12 @@ class TemplateGenerate extends BaseJson {
 			'include_tables' => (bool) $this->getInput('include_tables', 1)
 		]);
 
-		$export = $builder->build($roots);
+		// Imported walk: limit tables to the columns present in the file.
+		$columns = array_values(array_filter(array_map('strval', $this->getInput('columns', [])),
+			static fn($c) => preg_match('/^\d+(\.\d+)*$/', $c)
+		));
+
+		$export = $builder->build($roots, $columns);
 		$template = $export['zabbix_export']['templates'][0];
 		$mode = $this->getInput('mode');
 
@@ -86,6 +93,15 @@ class TemplateGenerate extends BaseJson {
 					'filename' => $filename.'.yaml',
 					'mime' => 'application/yaml',
 					'content' => YamlWriter::write($export)
+				]);
+				break;
+
+			case 'xml':
+				$this->respond([
+					'summary' => $summary,
+					'filename' => $filename.'.xml',
+					'mime' => 'application/xml',
+					'content' => ZabbixXmlWriter::write($export)
 				]);
 				break;
 

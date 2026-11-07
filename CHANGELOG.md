@@ -1,5 +1,20 @@
 # Journal des modifications
 
+## 1.3.0 — 2026-11-07
+
+### Ajouté
+- **Export des résultats** Get/Walk en CSV, Excel (.xlsx), JSON, XML et texte snmpwalk (menu « Exporter… »).
+- **Import d'un walk** (bouton « Importer un walk ») : sortie `snmpwalk` numérique, symbolique, `-OX` ou `iso.`, index texte ou énumérés, exports du module, fichiers `.gz` ou `.zip`. Parcours hors ligne, création d'éléments et génération d'un modèle limité aux objets du fichier.
+- **Modèles en YAML, XML ou JSON** (choix du format au téléchargement).
+- **Ajout de MIB en lot** depuis une archive `.zip`, `.tar`, `.tar.gz` ou `.tgz` ; les fichiers sans module MIB sont ignorés.
+- **Téléchargement des MIB** : un fichier, les MIB ajoutées ou toutes les MIB (.zip).
+- **Export des objets** d'un module ou d'une branche de l'arbre en CSV, Excel ou JSON.
+- Options `max_walk_size` et `max_archive_size`.
+- Tests : import de walks réels, réimport des exports, archives, Excel, modèles XML (167 tests).
+
+### Modifié
+- Un modèle généré depuis un walk importé est nommé d'après l'hôte ou le fichier.
+
 ## 1.2.0 — 2026-11-07
 
 ### Ajouté

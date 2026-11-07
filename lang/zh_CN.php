@@ -1,7 +1,7 @@
 <?php declare(strict_types = 0);
 /*
 ** MIB Browser module for Zabbix 8.0
-** Chinese (Simplified) translation. Keys are the English source texts.
+** Chinese (simplified) translation. Keys are the English source texts.
 */
 
 return [
@@ -66,7 +66,6 @@ return [
 	'Convert counters to per-second rates' => '将计数器转换为每秒速率',
 	'Link the template to the selected host after import' => '导入后将模板关联到所选主机',
 	'Preview' => '预览',
-	'Download YAML' => '下载 YAML',
 	'Import into Zabbix' => '导入到 Zabbix',
 	'The module data directory is not writable by the web server: %1$s. The cache and MIB upload are disabled.' => 'Web 服务器无法写入模块数据目录：%1$s。缓存和 MIB 上传已禁用。',
 	'Node' => '节点',
@@ -229,5 +228,30 @@ return [
 	'Obsolete MD5 authentication: prefer SHA-256 or higher.' => 'MD5 认证已过时：建议使用 SHA-256 或更高。',
 	'Ageing SHA-1 authentication: prefer SHA-256 or higher.' => 'SHA-1 认证已老化：建议使用 SHA-256 或更高。',
 	'Obsolete DES encryption: prefer AES-128 or higher.' => 'DES 加密已过时：建议使用 AES-128 或更高。',
-	'%1$sd' => '%1$s天'
+	'%1$sd' => '%1$s天',
+	'Cannot read the archive.' => '无法读取压缩包。',
+	'%1$s other file(s) ignored.' => '已忽略 %1$s 个其他文件。',
+	'Archive too large: the remaining files were not imported.' => '压缩包过大：其余文件未导入。',
+	'Encrypted file, ignored.' => '加密文件，已忽略。',
+	'Raw value' => '原始值',
+	'Request' => '请求',
+	'No MIB added by a user.' => '没有用户添加的 MIB。',
+	'No SNMP value found in the file.' => '文件中未找到 SNMP 值。',
+	'Import a walk' => '导入 walk',
+	'Open a walk file (snmpwalk output, JSON, CSV or XML export, .gz or .zip) to browse it without access to the device.' => '打开 walk 文件（snmpwalk 输出、JSON、CSV 或 XML 导出、.gz 或 .zip），无需访问设备即可浏览。',
+	'Format' => '格式',
+	'Download' => '下载',
+	'File %1$s' => '文件 %1$s',
+	'Export…' => '导出…',
+	'snmpwalk text' => 'snmpwalk 文本',
+	'Values read from a file, not from the device. Select a host to create items on it, or generate a template.' => '这些值读取自文件，而非设备。选择一个主机以在其上创建监控项，或生成模板。',
+	'%1$s line(s) not imported: unknown object (load its MIB) or unreadable line.' => '%1$s 行未导入：未知对象（请加载其 MIB）或无法读取的行。',
+	'Examples' => '示例',
+	'Reading the file…' => '正在读取文件…',
+	'Export the branch…' => '导出分支…',
+	'MIB files (.mib, .my, .txt...) or archives of MIBs (.zip, .tar, .tar.gz).' => 'MIB 文件（.mib、.my、.txt...）或 MIB 压缩包（.zip、.tar、.tar.gz）。',
+	'Download added MIBs (.zip)' => '下载已添加的 MIB (.zip)',
+	'Download all MIBs (.zip)' => '下载全部 MIB (.zip)',
+	'Download the MIB file' => '下载 MIB 文件',
+	'Export the objects of the module' => '导出模块的对象'
 ];

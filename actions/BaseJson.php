@@ -51,6 +51,20 @@ abstract class BaseJson extends CController {
 		]));
 	}
 
+	/**
+	 * Send a file to download: the page decodes the base64 content and saves it.
+	 *
+	 * @param array $file  ['filename' => ..., 'mime' => ..., 'content' => ...]
+	 */
+	protected function respondFile(array $file, array $extra = []): void {
+		$this->respond([
+			'filename' => $file['filename'],
+			'mime' => $file['mime'],
+			'content_base64' => base64_encode($file['content']),
+			'size' => strlen($file['content'])
+		] + $extra);
+	}
+
 	protected function respondError(string $message, array $extra = []): void {
 		$messages = array_column(get_and_clear_messages(), 'message');
 

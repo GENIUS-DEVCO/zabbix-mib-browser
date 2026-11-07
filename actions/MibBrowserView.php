@@ -39,7 +39,9 @@ class MibBrowserView extends CController {
 
 		foreach (['mibbrowser.tree', 'mibbrowser.node', 'mibbrowser.interfaces', 'mibbrowser.query',
 				'mibbrowser.mibs', 'mibbrowser.mib.upload', 'mibbrowser.mib.delete', 'mibbrowser.item.create',
-				'mibbrowser.template.generate', 'mibbrowser.security', 'mibbrowser.settings', 'mibbrowser.test'] as $action) {
+				'mibbrowser.template.generate', 'mibbrowser.security', 'mibbrowser.settings', 'mibbrowser.test',
+				'mibbrowser.results.export', 'mibbrowser.walk.import', 'mibbrowser.mib.export',
+				'mibbrowser.tree.export'] as $action) {
 			$tokens[$action] = CCsrfTokenHelper::get($action);
 		}
 
@@ -63,6 +65,8 @@ class MibBrowserView extends CController {
 			'storage_problems' => $problems,
 			'is_super_admin' => CWebUser::getType() == USER_TYPE_SUPER_ADMIN,
 			'max_upload_size' => (int) Storage::option('max_upload_size', 5242880),
+			'max_walk_size' => (int) Storage::option('max_walk_size', 20971520),
+			'max_archive_size' => (int) Storage::option('max_archive_size', 52428800),
 			'is_https' => self::isHttps()
 		];
 

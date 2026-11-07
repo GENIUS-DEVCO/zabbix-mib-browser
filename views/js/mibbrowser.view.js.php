@@ -36,7 +36,11 @@ use Modules\MibBrowser\Lib\I18n;
 			none: <?= json_encode(I18n::t('Not encrypted')) ?>
 		};
 
-		init({tokens, csrf_field, oid, is_super_admin, max_upload_size, is_https}) {
+		init({tokens, csrf_field, oid, is_super_admin, max_upload_size, max_walk_size, max_archive_size, is_https}) {
+			this.max_walk_size = max_walk_size;
+			this.max_archive_size = max_archive_size;
+			this.last_result = null;
+			this.template_columns = [];
 			this.is_https = is_https;
 			this.policy = 'warn';
 			this.tokens = tokens;
@@ -121,7 +125,7 @@ use Modules\MibBrowser\Lib\I18n;
 			return format.replace(/%(\d+)\$s/g, (match, n) => String(args[n - 1] ?? ''));
 		}
 
-		async request(action, params = {}, files = null) {
+		async request(action, params = {}, files = null, field = 'mibs[]') {
 			const body = new FormData();
 
 			body.append(this.csrf_field, this.tokens[action]);
@@ -142,7 +146,7 @@ use Modules\MibBrowser\Lib\I18n;
 
 			if (files !== null) {
 				for (const file of files) {
-					body.append('mibs[]', file, file.name);
+					body.append(field, file, file.name);
 				}
 			}
 
@@ -221,6 +225,16 @@ use Modules\MibBrowser\Lib\I18n;
 			this.$('mibb-get').addEventListener('click', () => this.runQuery('get'));
 			this.$('mibb-walk').addEventListener('click', () => this.runQuery('walk'));
 			this.$('mibb-test').addEventListener('click', () => this.testConnection());
+
+			const walk_file = this.$('mibb-walk-file');
+
+			this.$('mibb-walk-import').addEventListener('click', () => walk_file.click());
+			walk_file.addEventListener('change', () => {
+				if (walk_file.files.length) {
+					this.importWalk(walk_file.files[0]);
+					walk_file.value = '';
+				}
+			});
 
 			this.$('mibb-oid').addEventListener('keydown', (e) => {
 				if (e.key === 'Enter') {
@@ -525,14 +539,22 @@ use Modules\MibBrowser\Lib\I18n;
 			const panel = this.$('mibb-panel-results');
 			panel.innerHTML = '';
 			this.last_rows = result.rows;
+			this.last_result = result;
 
-			const info = [
-				result.operation === 'walk' ? 'Walk' : 'Get',
-				' ', result.snmp_oid, ' — ',
-				this.fmt(<?= json_encode(I18n::t('%1$s value(s)')) ?>, result.total),
-				' — ' + result.duration + ' s',
-				this.host ? ' — ' + this.host.name + (this.host.proxy ? ' (proxy ' + this.host.proxy + ')' : '') : ''
-			].join('');
+			const from_file = result.source === 'file';
+			const info = from_file
+				? [
+					this.fmt(<?= json_encode(I18n::t('File %1$s')) ?>, result.filename), ' — ',
+					this.fmt(<?= json_encode(I18n::t('%1$s value(s)')) ?>, result.total),
+					result.file_host ? ' — ' + result.file_host : ''
+				].join('')
+				: [
+					result.operation === 'walk' ? 'Walk' : 'Get',
+					' ', result.snmp_oid, ' — ',
+					this.fmt(<?= json_encode(I18n::t('%1$s value(s)')) ?>, result.total),
+					' — ' + result.duration + ' s',
+					this.host ? ' — ' + this.host.name + (this.host.proxy ? ' (proxy ' + this.host.proxy + ')' : '') : ''
+				].join('');
 
 			const filter = this.el('input', {type: 'text', class: 'mibb-filter',
 				placeholder: <?= json_encode(I18n::t('Filter results')) ?>
@@ -541,16 +563,40 @@ use Modules\MibBrowser\Lib\I18n;
 			const header = this.el('div', {class: 'mibb-results-header'},
 				this.el('span', {class: 'mibb-results-info', text: info}),
 				filter,
-				this.el('button', {type: 'button', class: 'btn-alt', text: 'CSV', onclick: () => this.exportCsv()}),
-				result.operation === 'walk' && result.rows.length
+				result.rows.length
+					? this.exportMenu(<?= json_encode(I18n::t('Export…')) ?>, [
+						['csv', 'CSV'], ['xlsx', 'Excel (.xlsx)'], ['json', 'JSON'], ['xml', 'XML'],
+						['snmpwalk', <?= json_encode(I18n::t('snmpwalk text')) ?>]
+					], (format) => this.exportResults(format))
+					: null,
+				result.operation === 'walk' && result.rows.length && (!from_file || result.roots.length)
 					? this.el('button', {type: 'button', class: 'btn-alt',
 						text: <?= json_encode(I18n::t('Generate a template')) ?>,
-						onclick: () => this.openTemplateDialog([this.subtreeRoot(result.oid)])
+						onclick: () => from_file
+							? this.openTemplateDialog(result.roots, null, result.columns,
+								this.fmt(<?= json_encode(I18n::t('File %1$s')) ?>, result.filename),
+								result.file_host || result.filename.replace(/\.[^.]*$/, ''))
+							: this.openTemplateDialog([this.subtreeRoot(result.oid)])
 					})
 					: null
 			);
 
 			panel.append(header);
+
+			if (from_file) {
+				panel.append(this.el('div', {class: 'mibb-msg mibb-msg-info',
+					text: <?= json_encode(I18n::t('Values read from a file, not from the device. Select a host to create items on it, or generate a template.')) ?>
+				}));
+			}
+
+			if (from_file && result.skipped_count) {
+				panel.append(this.el('div', {class: 'mibb-msg mibb-msg-warning'},
+					this.fmt(<?= json_encode(I18n::t('%1$s line(s) not imported: unknown object (load its MIB) or unreadable line.')) ?>, result.skipped_count),
+					this.el('details', {}, this.el('summary', {text: <?= json_encode(I18n::t('Examples')) ?>}),
+						this.el('pre', {class: 'mibb-mono', text: result.skipped.join('\n')})
+					)
+				));
+			}
 
 			if (result.security && result.security.level !== 'encrypted') {
 				panel.append(this.el('div', {class: 'mibb-msg ' + (result.security.encrypted ? 'mibb-msg-info' : 'mibb-msg-warning')},
@@ -631,15 +677,94 @@ use Modules\MibBrowser\Lib\I18n;
 			return oid;
 		}
 
-		exportCsv() {
-			const escape = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
-			const lines = [['OID', 'Name', 'Type', 'Value', 'Raw'].join(';')];
+		async exportResults(format) {
+			const result = this.last_result;
+			const rows = this.last_rows.map(({oid, label, type, value, raw, snmp_type}) => ({oid, label, type, value, raw, snmp_type}));
+			const response = await this.request('mibbrowser.results.export', {
+				format,
+				rows: JSON.stringify(rows),
+				host: result.source === 'file' ? (result.file_host || result.filename) : (this.host ? this.host.name : ''),
+				request: result.source === 'file' ? result.filename : result.snmp_oid
+			});
 
-			for (const row of this.last_rows) {
-				lines.push([row.oid, row.label, row.type, row.value, row.raw].map(escape).join(';'));
+			if (response.error) {
+				alert(response.error);
+
+				return;
 			}
 
-			this.download('snmp-' + Date.now() + '.csv', '﻿' + lines.join('\r\n'), 'text/csv');
+			this.downloadFile(response);
+		}
+
+		async importWalk(file) {
+			const panel = this.$('mibb-panel-results');
+
+			this.showTab('results');
+
+			if (file.size > this.max_walk_size) {
+				this.message(panel, this.fmt(<?= json_encode(I18n::t('%1$s: file too large.')) ?>, file.name));
+
+				return;
+			}
+
+			this.message(panel, <?= json_encode(I18n::t('Reading the file…')) ?>, 'info');
+
+			const result = await this.request('mibbrowser.walk.import', {}, [file], 'file');
+
+			if (result.error) {
+				this.message(panel, result.error);
+
+				if (result.skipped && result.skipped.length) {
+					panel.append(this.el('pre', {class: 'mibb-mono mibb-skipped', text: result.skipped.join('\n')}));
+				}
+
+				return;
+			}
+
+			this.renderResults(result);
+		}
+
+		/**
+		 * Save a file sent by an export action (base64 content).
+		 */
+		downloadFile(result) {
+			const binary = atob(result.content_base64);
+			const bytes = new Uint8Array(binary.length);
+
+			for (let i = 0; i < binary.length; i++) {
+				bytes[i] = binary.charCodeAt(i);
+			}
+
+			const url = URL.createObjectURL(new Blob([bytes], {type: result.mime}));
+			const link = this.el('a', {href: url, download: result.filename});
+
+			document.body.append(link);
+			link.click();
+			link.remove();
+			setTimeout(() => URL.revokeObjectURL(url), 1000);
+		}
+
+		/**
+		 * Export format menu: a select whose first option is the label.
+		 */
+		exportMenu(label, formats, onselect) {
+			const select = this.el('select', {class: 'mibb-select mibb-export', title: label},
+				this.el('option', {value: '', text: label}),
+				formats.map(([value, text]) => this.el('option', {value, text}))
+			);
+
+			select.addEventListener('change', async () => {
+				const format = select.value;
+
+				if (format !== '') {
+					select.disabled = true;
+					await onselect(format);
+					select.value = '';
+					select.disabled = false;
+				}
+			});
+
+			return select;
 		}
 
 		download(filename, content, mime) {
@@ -959,7 +1084,11 @@ use Modules\MibBrowser\Lib\I18n;
 							oid: node.oid + '.0', node_oid: node.oid, index: '0', label: node.label + '.0'
 						})
 					})
-					: null
+					: null,
+				this.exportMenu(<?= json_encode(I18n::t('Export the branch…')) ?>,
+					[['csv', 'CSV'], ['xlsx', 'Excel (.xlsx)'], ['json', 'JSON']],
+					(format) => this.exportTree(node.oid, format)
+				)
 			);
 
 			panel.append(buttons, table);
@@ -973,6 +1102,30 @@ use Modules\MibBrowser\Lib\I18n;
 			if (node.description) {
 				panel.append(this.el('div', {class: 'mibb-description', text: node.description}));
 			}
+		}
+
+		async exportTree(root, format) {
+			const result = await this.request('mibbrowser.tree.export', {root, format});
+
+			if (result.error) {
+				alert(result.error);
+
+				return;
+			}
+
+			this.downloadFile(result);
+		}
+
+		async exportMibs(scope, module = '') {
+			const result = await this.request('mibbrowser.mib.export', {scope, module});
+
+			if (result.error) {
+				alert(result.error);
+
+				return;
+			}
+
+			this.downloadFile(result);
 		}
 
 		/* ------------------------------------------------------------------ */
@@ -996,8 +1149,8 @@ use Modules\MibBrowser\Lib\I18n;
 			this.mibs_loaded = true;
 
 			if (this.is_super_admin) {
-				const input = this.el('input', {type: 'file', multiple: true, accept: '.mib,.txt,.my,.smi,text/plain',
-					id: 'mibb-upload-input'
+				const input = this.el('input', {type: 'file', multiple: true,
+					accept: '.mib,.txt,.my,.smi,.zip,.tar,.gz,.tgz,text/plain', id: 'mibb-upload-input'
 				});
 				const status = this.el('div', {class: 'mibb-upload-status'});
 
@@ -1009,12 +1162,27 @@ use Modules\MibBrowser\Lib\I18n;
 					}),
 					status
 				));
+				panel.append(this.el('div', {class: 'mibb-hint',
+					text: <?= json_encode(I18n::t('MIB files (.mib, .my, .txt...) or archives of MIBs (.zip, .tar, .tar.gz).')) ?>
+				}));
 			}
 			else {
 				panel.append(this.el('div', {class: 'mibb-hint',
 					text: <?= json_encode(I18n::t('Only a Super admin can add or delete MIBs.')) ?>
 				}));
 			}
+
+			panel.append(this.el('div', {class: 'mibb-mib-export'},
+				this.el('button', {type: 'button', class: 'btn-alt',
+					text: <?= json_encode(I18n::t('Download added MIBs (.zip)')) ?>,
+					disabled: !result.modules.some((m) => m.source === 'user'),
+					onclick: () => this.exportMibs('user')
+				}),
+				this.el('button', {type: 'button', class: 'btn-alt',
+					text: <?= json_encode(I18n::t('Download all MIBs (.zip)')) ?>,
+					onclick: () => this.exportMibs('all')
+				})
+			));
 
 			if (result.storage_problems && result.storage_problems.length) {
 				panel.append(this.el('div', {class: 'mibb-msg mibb-msg-warning',
@@ -1044,6 +1212,14 @@ use Modules\MibBrowser\Lib\I18n;
 					this.el('td', {class: 'mibb-actions'},
 						this.el('button', {type: 'button', class: 'btn-link', text: <?= json_encode(I18n::t('Template')) ?>,
 							onclick: () => this.openTemplateDialog(['module:' + module.name], {name: module.name, module: module.name})
+						}),
+						this.el('button', {type: 'button', class: 'btn-link', text: <?= json_encode(I18n::t('File')) ?>,
+							title: <?= json_encode(I18n::t('Download the MIB file')) ?>,
+							onclick: () => this.exportMibs('module', module.name)
+						}),
+						this.el('button', {type: 'button', class: 'btn-link', text: 'CSV',
+							title: <?= json_encode(I18n::t('Export the objects of the module')) ?>,
+							onclick: () => this.exportTree('module:' + module.name, 'csv')
 						}),
 						this.is_super_admin && module.source === 'user'
 							? this.el('button', {type: 'button', class: 'btn-link mibb-danger', text: <?= json_encode(_('Delete')) ?>,
@@ -1185,7 +1361,9 @@ use Modules\MibBrowser\Lib\I18n;
 			}
 
 			for (const file of input.files) {
-				if (file.size > this.max_upload_size) {
+				const archive = /\.(zip|tar|gz|tgz)$/i.test(file.name);
+
+				if (file.size > (archive ? this.max_archive_size : this.max_upload_size)) {
 					this.message(status, this.fmt(<?= json_encode(I18n::t('%1$s: file too large.')) ?>, file.name));
 
 					return;
@@ -1204,7 +1382,9 @@ use Modules\MibBrowser\Lib\I18n;
 
 			const lines = result.results.map((r) => r.error
 				? r.file + ' : ' + r.error
-				: this.fmt(<?= json_encode(I18n::t('%1$s: %2$s (%3$s objects)')) ?>, r.file, r.modules.join(', '), r.objects)
+				: (r.info
+					? r.file + ' : ' + r.info
+					: this.fmt(<?= json_encode(I18n::t('%1$s: %2$s (%3$s objects)')) ?>, r.file, r.modules.join(', '), r.objects))
 			);
 
 			this.mibs_loaded = false;
@@ -1366,16 +1546,17 @@ use Modules\MibBrowser\Lib\I18n;
 			this.$('mibb-tpl-cancel').addEventListener('click', () => this.closeDialog(dialog));
 			this.$('mibb-tpl-form').addEventListener('submit', (e) => e.preventDefault());
 			this.$('mibb-tpl-preview-btn').addEventListener('click', () => this.generateTemplate('preview'));
-			this.$('mibb-tpl-yaml').addEventListener('click', () => this.generateTemplate('yaml'));
+			this.$('mibb-tpl-download').addEventListener('click', () => this.generateTemplate(this.$('mibb-tpl-format').value));
 			this.$('mibb-tpl-import').addEventListener('click', () => this.generateTemplate('import'));
 		}
 
-		openTemplateDialog(roots, node = null) {
+		openTemplateDialog(roots, node = null, columns = [], source = null, name = null) {
 			const dialog = this.$('mibb-tpl-dialog');
-			const label = node ? (node.module && node.name !== node.module ? node.module + '::' + node.name : node.name) : roots.join(', ');
-			const base = node ? (node.name === node.module ? node.module : node.name) : 'SNMP device';
+			const label = source ?? (node ? (node.module && node.name !== node.module ? node.module + '::' + node.name : node.name) : roots.join(', '));
+			const base = name ?? (node ? (node.name === node.module ? node.module : node.name) : 'SNMP device');
 
 			this.template_roots = roots;
+			this.template_columns = columns;
 			this.$('mibb-tpl-roots').textContent = this.fmt(<?= json_encode(I18n::t('Source: %1$s')) ?>, label);
 			this.$('mibb-tpl-name').value = base + ' by SNMP';
 			this.$('mibb-tpl-preview').innerHTML = '';
@@ -1397,6 +1578,7 @@ use Modules\MibBrowser\Lib\I18n;
 			const message = this.$('mibb-tpl-message');
 			const params = {
 				roots: this.template_roots,
+				columns: this.template_columns,
 				template: this.$('mibb-tpl-name').value.trim(),
 				group: this.$('mibb-tpl-group').value.trim(),
 				key_prefix: this.$('mibb-tpl-prefix').value.trim(),
@@ -1424,7 +1606,7 @@ use Modules\MibBrowser\Lib\I18n;
 
 			this.renderTemplateSummary(result.summary);
 
-			if (mode === 'yaml') {
+			if (mode === 'yaml' || mode === 'xml' || mode === 'json') {
 				this.download(result.filename, result.content, result.mime);
 				this.message(message, this.fmt(<?= json_encode(I18n::t('File downloaded: %1$s')) ?>, result.filename), 'success');
 			}

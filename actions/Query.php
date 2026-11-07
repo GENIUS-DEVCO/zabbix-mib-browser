@@ -8,8 +8,7 @@ namespace Modules\MibBrowser\Actions;
 
 use Modules\MibBrowser\Lib\I18n;
 
-use Modules\MibBrowser\Lib\ItemMapper,
-	Modules\MibBrowser\Lib\SnmpResult,
+use Modules\MibBrowser\Lib\SnmpResult,
 	Modules\MibBrowser\Lib\Storage,
 	Modules\MibBrowser\Lib\ZabbixSnmp;
 
@@ -90,27 +89,7 @@ class Query extends BaseJson {
 
 		$max = (int) Storage::option('max_results', 5000);
 		$total = count($records);
-		$records = array_slice($records, 0, $max);
-		$rows = [];
-
-		foreach ($records as $record) {
-			$match = $repository->translate($record['oid']);
-			$mib_node = $match['oid'] !== null ? $repository->getNode($match['oid']) : null;
-			$formatted = SnmpResult::format($record, $mib_node);
-
-			$rows[] = [
-				'oid' => $record['oid'],
-				'label' => $match['label'],
-				'node_oid' => $match['oid'],
-				'index' => $match['suffix'],
-				'kind' => $mib_node['kind'] ?? '',
-				'type' => $formatted['type'],
-				'value' => mb_substr($formatted['value'], 0, 4096),
-				'raw' => mb_substr($record['raw'], 0, 4096),
-				'can_create_item' => $mib_node !== null && in_array($mib_node['kind'], ['scalar', 'column'], true)
-					&& ItemMapper::isReadable($mib_node)
-			];
-		}
+		$rows = SnmpResult::buildRows(array_slice($records, 0, $max), $repository);
 
 		$this->respond([
 			'operation' => $operation,

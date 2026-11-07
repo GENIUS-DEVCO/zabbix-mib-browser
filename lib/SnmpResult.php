@@ -43,6 +43,38 @@ class SnmpResult {
 	}
 
 	/**
+	 * Result rows for the browser: MIB translation and formatted values.
+	 *
+	 * @param array         $records     Records from parseWalk() / parseValue() with "oid".
+	 * @param MibRepository $repository
+	 */
+	public static function buildRows(array $records, MibRepository $repository): array {
+		$rows = [];
+
+		foreach ($records as $record) {
+			$match = $repository->translate($record['oid']);
+			$mib_node = $match['oid'] !== null ? $repository->getNode($match['oid']) : null;
+			$formatted = self::format($record, $mib_node);
+
+			$rows[] = [
+				'oid' => $record['oid'],
+				'label' => $match['label'],
+				'node_oid' => $match['oid'],
+				'index' => $match['suffix'],
+				'kind' => $mib_node['kind'] ?? '',
+				'type' => $formatted['type'],
+				'snmp_type' => $record['type'],
+				'value' => mb_substr($formatted['value'], 0, 4096),
+				'raw' => mb_substr($record['raw'], 0, 4096),
+				'can_create_item' => $mib_node !== null && in_array($mib_node['kind'], ['scalar', 'column'], true)
+					&& ItemMapper::isReadable($mib_node)
+			];
+		}
+
+		return $rows;
+	}
+
+	/**
 	 * Parse "TYPE: value" or bare value.
 	 */
 	public static function parseValue(string $value): array {

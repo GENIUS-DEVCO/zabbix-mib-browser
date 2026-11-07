@@ -621,3 +621,44 @@ html[theme="hc-dark"] .mibb-dialog {
 .mibb-test-list li {
 	list-style: disc;
 }
+
+/* Import / export */
+
+.mibb-export {
+	width: auto;
+	max-width: 220px;
+}
+
+.mibb-format {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.mibb-format .mibb-select {
+	width: auto;
+}
+
+.mibb-dialog-buttons {
+	align-items: center;
+}
+
+.mibb-mib-export {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-bottom: 10px;
+}
+
+.mibb-msg details,
+.mibb-skipped {
+	margin-top: 4px;
+}
+
+.mibb-msg pre,
+.mibb-skipped {
+	white-space: pre-wrap;
+	word-break: break-all;
+	max-height: 160px;
+	overflow: auto;
+}

@@ -64,7 +64,15 @@ $query_form = (new CForm())
 					->addClass(ZBX_STYLE_BTN_ALT),
 				(new CButton('mibb-credentials-toggle', I18n::t('Credentials')))
 					->setId('mibb-credentials-toggle')
+					->addClass(ZBX_STYLE_BTN_ALT),
+				(new CButton('mibb-walk-import', I18n::t('Import a walk')))
+					->setId('mibb-walk-import')
 					->addClass(ZBX_STYLE_BTN_ALT)
+					->setTitle(I18n::t('Open a walk file (snmpwalk output, JSON, CSV or XML export, .gz or .zip) to browse it without access to the device.')),
+				(new CInput('file', 'walk_file'))
+					->setId('mibb-walk-file')
+					->setAttribute('accept', '.txt,.walk,.snmpwalk,.log,.out,.json,.csv,.xml,.gz,.zip,text/plain')
+					->addStyle('display: none')
 			]))->addClass('mibb-buttons')
 		]))->addClass('mibb-query-row')
 	)
@@ -272,7 +280,15 @@ $template_dialog = (new CTag('dialog', true, [
 		(new CDiv())->setId('mibb-tpl-message')->addClass('mibb-dialog-message'),
 		(new CDiv([
 			(new CButton('mibb-tpl-preview-btn', I18n::t('Preview')))->setId('mibb-tpl-preview-btn')->addClass(ZBX_STYLE_BTN_ALT),
-			(new CButton('mibb-tpl-yaml', I18n::t('Download YAML')))->setId('mibb-tpl-yaml')->addClass(ZBX_STYLE_BTN_ALT),
+			(new CTag('label', true, [
+				I18n::t('Format').' ',
+				(new CTag('select', true, [
+					(new CTag('option', true, 'YAML'))->setAttribute('value', 'yaml'),
+					(new CTag('option', true, 'XML'))->setAttribute('value', 'xml'),
+					(new CTag('option', true, 'JSON'))->setAttribute('value', 'json')
+				]))->setId('mibb-tpl-format')->addClass('mibb-select')
+			]))->addClass('mibb-format'),
+			(new CButton('mibb-tpl-download', I18n::t('Download')))->setId('mibb-tpl-download')->addClass(ZBX_STYLE_BTN_ALT),
 			(new CButton('mibb-tpl-import', I18n::t('Import into Zabbix')))->setId('mibb-tpl-import'),
 			(new CButton('mibb-tpl-cancel', _('Close')))->setId('mibb-tpl-cancel')->addClass(ZBX_STYLE_BTN_ALT)
 		]))->addClass('mibb-dialog-buttons')
@@ -306,6 +322,8 @@ if ($data['storage_problems']) {
 		'oid' => $data['oid'],
 		'is_super_admin' => $data['is_super_admin'],
 		'max_upload_size' => $data['max_upload_size'],
+		'max_walk_size' => $data['max_walk_size'],
+		'max_archive_size' => $data['max_archive_size'],
 		'is_https' => $data['is_https']
 	]).');
 '))
