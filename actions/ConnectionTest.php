@@ -6,6 +6,8 @@
 
 namespace Modules\MibBrowser\Actions;
 
+use Modules\MibBrowser\Lib\I18n;
+
 use API,
 	Modules\MibBrowser\Lib\ConnectionDiagnosis,
 	Modules\MibBrowser\Lib\SnmpResult,
@@ -95,7 +97,7 @@ class ConnectionTest extends BaseJson {
 			$info['object_label'] = $match['oid'] !== null && $match['suffix'] === '' ? $match['label'] : '';
 
 			if ($vendor !== null) {
-				$info['vendor'] = $vendor['vendor'] ?? _s('Entreprise n° %1$s', $vendor['enterprise']);
+				$info['vendor'] = $vendor['vendor'] ?? I18n::s('Enterprise no. %1$s', $vendor['enterprise']);
 				$info['enterprise'] = $vendor['enterprise'];
 			}
 		}

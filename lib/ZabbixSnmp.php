@@ -138,7 +138,7 @@ class ZabbixSnmp {
 		]);
 
 		if (!$interfaces) {
-			$this->error = _('Cet hôte n\'a pas d\'interface SNMP.');
+			$this->error = I18n::t('This host has no SNMP interface.');
 
 			return null;
 		}

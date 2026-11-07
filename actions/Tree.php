@@ -6,6 +6,8 @@
 
 namespace Modules\MibBrowser\Actions;
 
+use Modules\MibBrowser\Lib\I18n;
+
 use Modules\MibBrowser\Lib\Storage;
 
 class Tree extends BaseJson {
@@ -31,7 +33,7 @@ class Tree extends BaseJson {
 			$oid = $repository->resolveSymbolic($this->getInput('path'));
 
 			if ($oid === null) {
-				$this->respondError(_('Objet MIB inconnu.'));
+				$this->respondError(I18n::t('Unknown MIB object.'));
 
 				return;
 			}

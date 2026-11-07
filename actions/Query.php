@@ -6,6 +6,8 @@
 
 namespace Modules\MibBrowser\Actions;
 
+use Modules\MibBrowser\Lib\I18n;
+
 use Modules\MibBrowser\Lib\ItemMapper,
 	Modules\MibBrowser\Lib\SnmpResult,
 	Modules\MibBrowser\Lib\Storage,
@@ -30,7 +32,7 @@ class Query extends BaseJson {
 		$oid = $repository->resolveSymbolic($input);
 
 		if ($oid === null) {
-			$this->respondError(_s('OID ou nom MIB inconnu : %1$s', $input));
+			$this->respondError(I18n::s('Unknown OID or MIB name: %1$s', $input));
 
 			return;
 		}
@@ -58,7 +60,7 @@ class Query extends BaseJson {
 
 			if (strpos($error, 'policy:') === 0) {
 				$this->respond([
-					'error' => _s('Requête refusée : le module exige une interface SNMPv3 chiffrée (authPriv), or cette interface utilise %1$s. Configurez SNMPv3 authPriv sur l\'hôte, ou demandez à un Super admin de changer la politique dans l\'onglet « Sécurité SNMP ».',
+					'error' => I18n::s('Request denied: the module requires an encrypted SNMPv3 interface (authPriv), but this interface uses %1$s. Configure SNMPv3 authPriv on the host, or ask a Super admin to change the policy in the "SNMP security" tab.',
 						substr($error, 7)
 					),
 					'security' => $snmp->getSecurity()
@@ -66,12 +68,12 @@ class Query extends BaseJson {
 			}
 			elseif (strpos($error, 'secret:') === 0) {
 				$this->respond([
-					'error' => _('Les identifiants SNMP de cette interface utilisent des macros secrètes ou non résolues. Saisissez-les dans « Identifiants » pour cette requête.'),
+					'error' => I18n::t('The SNMP credentials of this interface use secret or unresolved macros. Enter them in "Credentials" for this request.'),
 					'need_credentials' => explode(',', substr($error, 7))
 				]);
 			}
 			else {
-				$this->respondError($error !== '' ? $error : _('Unknown error.'));
+				$this->respondError($error !== '' ? $error : I18n::t('Unknown error.'));
 			}
 
 			return;

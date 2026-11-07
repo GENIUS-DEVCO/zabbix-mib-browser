@@ -6,6 +6,8 @@
 
 namespace Modules\MibBrowser\Actions;
 
+use Modules\MibBrowser\Lib\I18n;
+
 use API,
 	CUrl,
 	Modules\MibBrowser\Lib\Storage,
@@ -36,7 +38,7 @@ class TemplateGenerate extends BaseJson {
 		));
 
 		if (!$roots) {
-			$this->respondError(_('Sélectionnez un nœud ou un module MIB.'));
+			$this->respondError(I18n::t('Select a MIB node or module.'));
 
 			return;
 		}
@@ -44,7 +46,7 @@ class TemplateGenerate extends BaseJson {
 		$key_prefix = $this->getInput('key_prefix', '');
 
 		if ($key_prefix !== '' && !preg_match('/^[A-Za-z0-9_.-]+$/', $key_prefix)) {
-			$this->respondError(_('Le préfixe de clé ne peut contenir que lettres, chiffres, « _ », « - » et « . ».'));
+			$this->respondError(I18n::t('The key prefix may only contain letters, digits, "_", "-" and ".".'));
 
 			return;
 		}
@@ -65,7 +67,7 @@ class TemplateGenerate extends BaseJson {
 		$mode = $this->getInput('mode');
 
 		if (empty($template['items'])) {
-			$this->respondError(implode("\n", $builder->getWarnings() ?: [_('Rien à générer.')]));
+			$this->respondError(implode("\n", $builder->getWarnings() ?: [I18n::t('Nothing to generate.')]));
 
 			return;
 		}
@@ -161,10 +163,10 @@ class TemplateGenerate extends BaseJson {
 			->setArgument('filter_set', '1')
 			->getUrl();
 
-		$message = _s('Modèle « %1$s » importé.', $template['template']);
+		$message = I18n::s('Template "%1$s" imported.', $template['template']);
 
 		if ($linked !== null) {
-			$message .= ' '._s('Lié à l\'hôte %1$s.', $linked);
+			$message .= ' '.I18n::s('Linked to host %1$s.', $linked);
 		}
 
 		$this->respond([

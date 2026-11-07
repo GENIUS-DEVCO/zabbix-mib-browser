@@ -8,6 +8,8 @@
 
 namespace Modules\MibBrowser;
 
+use Modules\MibBrowser\Lib\I18n;
+
 use APP,
 	CMenuItem,
 	CWebUser,
@@ -23,7 +25,7 @@ class Module extends CModule {
 		$menu = APP::Component()->get('menu.main');
 		$data_collection = $menu->find(_('Data collection'));
 
-		$item = (new CMenuItem(_('MIB browser')))->setAction('mibbrowser.view');
+		$item = (new CMenuItem(I18n::t('MIB browser')))->setAction('mibbrowser.view');
 
 		if ($data_collection !== null && $data_collection->hasSubMenu()) {
 			$submenu = $data_collection->getSubMenu();
@@ -36,7 +38,7 @@ class Module extends CModule {
 			}
 		}
 		else {
-			$menu->findOrAdd(_('Tools'))
+			$menu->findOrAdd(I18n::t('Tools'))
 				->setIcon(ZBX_ICON_COG_FILLED)
 				->getSubMenu()
 				->add($item);

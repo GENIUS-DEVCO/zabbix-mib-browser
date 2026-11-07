@@ -50,7 +50,7 @@ class SnmpSecurity {
 				'level' => self::LEVEL_NONE,
 				'encrypted' => false,
 				'summary' => $name,
-				'issues' => [_('La communauté et les valeurs circulent en clair sur le réseau.')]
+				'issues' => [I18n::t('The community and values travel in clear text on the network.')]
 			];
 		}
 
@@ -62,7 +62,7 @@ class SnmpSecurity {
 				'level' => self::LEVEL_NONE,
 				'encrypted' => false,
 				'summary' => $summary,
-				'issues' => [_('Aucune authentification ni chiffrement (noAuthNoPriv).')]
+				'issues' => [I18n::t('No authentication nor encryption (noAuthNoPriv).')]
 			];
 		}
 
@@ -74,7 +74,7 @@ class SnmpSecurity {
 				'level' => self::LEVEL_AUTH_ONLY,
 				'encrypted' => false,
 				'summary' => $summary.' ('.$auth_name.')',
-				'issues' => [_('Authentifié mais non chiffré (authNoPriv) : les valeurs circulent en clair.')]
+				'issues' => [I18n::t('Authenticated but not encrypted (authNoPriv): values travel in clear text.')]
 			];
 		}
 
@@ -83,14 +83,14 @@ class SnmpSecurity {
 		$issues = [];
 
 		if ($auth == self::AUTH_MD5) {
-			$issues[] = _('Authentification MD5 obsolète : préférez SHA-256 ou plus.');
+			$issues[] = I18n::t('Obsolete MD5 authentication: prefer SHA-256 or higher.');
 		}
 		elseif ($auth == self::AUTH_SHA1) {
-			$issues[] = _('Authentification SHA-1 vieillissante : préférez SHA-256 ou plus.');
+			$issues[] = I18n::t('Ageing SHA-1 authentication: prefer SHA-256 or higher.');
 		}
 
 		if ($priv == self::PRIV_DES) {
-			$issues[] = _('Chiffrement DES obsolète : préférez AES-128 ou plus.');
+			$issues[] = I18n::t('Obsolete DES encryption: prefer AES-128 or higher.');
 		}
 
 		return [

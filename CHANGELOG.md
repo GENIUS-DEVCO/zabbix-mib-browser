@@ -1,5 +1,14 @@
 # Journal des modifications
 
+## 1.2.0 — 2026-11-07
+
+### Ajouté
+- **Interface multilingue** : le module suit la langue du profil Zabbix de l'utilisateur. Les 25 langues proposées par Zabbix 8.0 sont prises en charge (anglais, allemand, catalan, chinois simplifié, coréen, danois, espagnol, français, géorgien, hébreu, italien, japonais, letton, norvégien, ouzbek, polonais, portugais du Brésil et du Portugal, russe, slovaque, tchèque, turc, ukrainien, vietnamien). Les autres langues utilisent l'anglais.
+- Test de complétude des traductions (tous les textes, mêmes paramètres) dans `tests/run.php`.
+
+### Modifié
+- Textes sources du module en anglais (`lib/I18n.php`, fichiers `lang/`).
+
 ## 1.1.0 — 2026-11-07
 
 ### Ajouté

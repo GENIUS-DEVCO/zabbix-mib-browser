@@ -6,6 +6,8 @@
 
 namespace Modules\MibBrowser\Actions;
 
+use Modules\MibBrowser\Lib\I18n;
+
 use API,
 	CUrl,
 	Modules\MibBrowser\Lib\ItemMapper,
@@ -35,7 +37,7 @@ class ItemCreate extends BaseJson {
 		$oid = ltrim(trim($this->getInput('oid')), '.');
 
 		if (!preg_match('/^\d+(\.\d+)+$/', $oid)) {
-			$this->respondError(_('OID numérique attendu.'));
+			$this->respondError(I18n::t('Numeric OID expected.'));
 
 			return;
 		}
@@ -91,7 +93,7 @@ class ItemCreate extends BaseJson {
 				]);
 
 				if (!$interfaces) {
-					$this->respondError(_('Cet hôte n\'a pas d\'interface SNMP.'));
+					$this->respondError(I18n::t('This host has no SNMP interface.'));
 
 					return;
 				}
@@ -147,7 +149,7 @@ class ItemCreate extends BaseJson {
 			'itemid' => $result['itemids'][0],
 			'host' => $hosts[0]['name'],
 			'url' => $url,
-			'message' => _s('Élément « %1$s » créé sur %2$s.', $item['name'], $hosts[0]['name'])
+			'message' => I18n::s('Item "%1$s" created on %2$s.', $item['name'], $hosts[0]['name'])
 		]);
 	}
 

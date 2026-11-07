@@ -6,6 +6,8 @@
 
 namespace Modules\MibBrowser\Actions;
 
+use Modules\MibBrowser\Lib\I18n;
+
 use Modules\MibBrowser\Lib\MibParser,
 	Modules\MibBrowser\Lib\Storage;
 
@@ -21,7 +23,7 @@ class MibUpload extends BaseJson {
 		$problems = Storage::check();
 
 		if ($problems) {
-			$this->respondError(_s('Le dossier de données n\'est pas accessible en écriture : %1$s',
+			$this->respondError(I18n::s('The data directory is not writable: %1$s',
 				implode(', ', $problems)
 			));
 
@@ -31,7 +33,7 @@ class MibUpload extends BaseJson {
 		$files = self::normalizeFiles($_FILES['mibs'] ?? []);
 
 		if (!$files) {
-			$this->respondError(_('Aucun fichier reçu.'));
+			$this->respondError(I18n::t('No file received.'));
 
 			return;
 		}
@@ -45,26 +47,26 @@ class MibUpload extends BaseJson {
 			$name = $file['name'];
 
 			if ($file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'])) {
-				$results[] = ['file' => $name, 'error' => _('Échec du téléversement.')];
+				$results[] = ['file' => $name, 'error' => I18n::t('Upload failed.')];
 				continue;
 			}
 
 			if ($file['size'] > $max_size) {
-				$results[] = ['file' => $name, 'error' => _('Fichier trop volumineux.')];
+				$results[] = ['file' => $name, 'error' => I18n::t('File too large.')];
 				continue;
 			}
 
 			$text = file_get_contents($file['tmp_name']);
 
 			if ($text === false || strpos($text, "\0") !== false) {
-				$results[] = ['file' => $name, 'error' => _('Ce n\'est pas un fichier texte.')];
+				$results[] = ['file' => $name, 'error' => I18n::t('Not a text file.')];
 				continue;
 			}
 
 			$modules = $parser->parse($text);
 
 			if (!$modules) {
-				$results[] = ['file' => $name, 'error' => _('Aucun module MIB trouvé (« DEFINITIONS ::= BEGIN »).')];
+				$results[] = ['file' => $name, 'error' => I18n::t('No MIB module found ("DEFINITIONS ::= BEGIN").')];
 				continue;
 			}
 
@@ -73,7 +75,7 @@ class MibUpload extends BaseJson {
 			$target = $dir.'/'.preg_replace('/[^A-Za-z0-9_.-]/', '_', $module_name).'.mib';
 
 			if (file_put_contents($target, $text, LOCK_EX) === false) {
-				$results[] = ['file' => $name, 'error' => _('Écriture impossible.')];
+				$results[] = ['file' => $name, 'error' => I18n::t('Cannot write the file.')];
 				continue;
 			}
 

@@ -157,8 +157,9 @@ class SnmpResult {
 		$days = intdiv($seconds, 86400);
 		$seconds %= 86400;
 
-		return sprintf('%dj %02d:%02d:%02d.%02d', $days, intdiv($seconds, 3600), intdiv($seconds % 3600, 60),
-			$seconds % 60, $ticks % 100
+		// "%1$sd" is the translatable short form of a number of days (for example "3d", "3j" in French).
+		return I18n::s('%1$sd', $days).' '.sprintf('%02d:%02d:%02d.%02d', intdiv($seconds, 3600),
+			intdiv($seconds % 3600, 60), $seconds % 60, $ticks % 100
 		);
 	}
 

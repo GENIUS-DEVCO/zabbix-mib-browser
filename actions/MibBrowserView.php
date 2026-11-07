@@ -6,6 +6,8 @@
 
 namespace Modules\MibBrowser\Actions;
 
+use Modules\MibBrowser\Lib\I18n;
+
 use API,
 	CController,
 	CControllerResponseData,
@@ -65,7 +67,7 @@ class MibBrowserView extends CController {
 		];
 
 		$response = new CControllerResponseData($data);
-		$response->setTitle(_('MIB browser'));
+		$response->setTitle(I18n::t('MIB browser'));
 		$this->setResponse($response);
 	}
 

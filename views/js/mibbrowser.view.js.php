@@ -5,21 +5,23 @@
 **
 ** @var CView $this
 */
+
+use Modules\MibBrowser\Lib\I18n;
 ?>
 
 <script>
 	const mibb_view = new class {
 
 		KIND_LABELS = {
-			node: <?= json_encode(_('Nœud')) ?>,
+			node: <?= json_encode(I18n::t('Node')) ?>,
 			module: <?= json_encode(_('Module')) ?>,
-			table: <?= json_encode(_('Table')) ?>,
-			row: <?= json_encode(_('Ligne de table')) ?>,
-			column: <?= json_encode(_('Colonne')) ?>,
-			scalar: <?= json_encode(_('Scalaire')) ?>,
-			notification: <?= json_encode(_('Notification (trap)')) ?>,
-			group: <?= json_encode(_('Groupe')) ?>,
-			compliance: <?= json_encode(_('Conformité')) ?>
+			table: <?= json_encode(I18n::t('Table')) ?>,
+			row: <?= json_encode(I18n::t('Table row')) ?>,
+			column: <?= json_encode(I18n::t('Column')) ?>,
+			scalar: <?= json_encode(I18n::t('Scalar')) ?>,
+			notification: <?= json_encode(I18n::t('Notification (trap)')) ?>,
+			group: <?= json_encode(I18n::t('Group')) ?>,
+			compliance: <?= json_encode(I18n::t('Compliance')) ?>
 		};
 
 		KIND_BADGES = {
@@ -28,10 +30,10 @@
 		};
 
 		SECURITY_LABELS = {
-			encrypted: <?= json_encode(_('Chiffré')) ?>,
-			weak: <?= json_encode(_('Chiffré (algorithmes faibles)')) ?>,
-			auth_only: <?= json_encode(_('Authentifié, non chiffré')) ?>,
-			none: <?= json_encode(_('Non chiffré')) ?>
+			encrypted: <?= json_encode(I18n::t('Encrypted')) ?>,
+			weak: <?= json_encode(I18n::t('Encrypted (weak algorithms)')) ?>,
+			auth_only: <?= json_encode(I18n::t('Authenticated, not encrypted')) ?>,
+			none: <?= json_encode(I18n::t('Not encrypted')) ?>
 		};
 
 		init({tokens, csrf_field, oid, is_super_admin, max_upload_size, is_https}) {
@@ -112,6 +114,13 @@
 			return node;
 		}
 
+		/**
+		 * Fill positional placeholders (%1$s, %2$s...) of a translated format.
+		 */
+		fmt(format, ...args) {
+			return format.replace(/%(\d+)\$s/g, (match, n) => String(args[n - 1] ?? ''));
+		}
+
 		async request(action, params = {}, files = null) {
 			const body = new FormData();
 
@@ -143,7 +152,7 @@
 				response = await fetch('zabbix.php?action=' + encodeURIComponent(action), {method: 'POST', body});
 			}
 			catch (e) {
-				return {error: <?= json_encode(_('Erreur réseau.')) ?> + ' ' + e.message};
+				return {error: <?= json_encode(I18n::t('Network error.')) ?> + ' ' + e.message};
 			}
 
 			const text = await response.text();
@@ -152,7 +161,7 @@
 				return JSON.parse(text);
 			}
 			catch (e) {
-				return {error: <?= json_encode(_('Réponse inattendue du serveur.')) ?> + ' (HTTP ' + response.status + ')'};
+				return {error: <?= json_encode(I18n::t('Unexpected server response.')) ?> + ' (HTTP ' + response.status + ')'};
 			}
 		}
 
@@ -229,7 +238,7 @@
 
 			if (!this.is_https && location.protocol !== 'https:') {
 				this.$('mibb-credentials-warning').append(this.el('div', {class: 'mibb-msg mibb-msg-warning',
-					text: <?= json_encode(_('Cette page n\'est pas servie en HTTPS : les identifiants saisis ici traversent le réseau en clair entre votre navigateur et Zabbix. Activez HTTPS sur l\'interface web avant de les utiliser.')) ?>
+					text: <?= json_encode(I18n::t('This page is not served over HTTPS: credentials typed here cross the network in clear text between your browser and Zabbix. Enable HTTPS on the web interface before using them.')) ?>
 				}));
 			}
 
@@ -264,7 +273,7 @@
 			this.policy = result.policy;
 
 			if (!result.interfaces.length) {
-				select.append(this.el('option', {value: '', text: <?= json_encode(_('Aucune interface SNMP')) ?>}));
+				select.append(this.el('option', {value: '', text: <?= json_encode(I18n::t('No SNMP interface')) ?>}));
 
 				return;
 			}
@@ -307,7 +316,7 @@
 
 			badge.className = 'mibb-sec mibb-sec-' + security.level;
 			badge.textContent = (security.encrypted ? '🔒 ' : '⚠ ') + this.SECURITY_LABELS[security.level]
-				+ (blocked ? ' — ' + <?= json_encode(_('bloqué par la politique')) ?> : '');
+				+ (blocked ? ' — ' + <?= json_encode(I18n::t('blocked by the policy')) ?> : '');
 			badge.title = security.summary + (security.issues.length ? '\n' + security.issues.join('\n') : '');
 			badge.style.display = '';
 		}
@@ -338,13 +347,13 @@
 			this.showTab('results');
 
 			if (this.host === null || this.$('mibb-interface').value === '') {
-				this.message(panel, <?= json_encode(_('Choisissez d\'abord un hôte avec une interface SNMP.')) ?>);
+				this.message(panel, <?= json_encode(I18n::t('First choose a host with an SNMP interface.')) ?>);
 
 				return;
 			}
 
 			if (oid === '') {
-				this.message(panel, <?= json_encode(_('Saisissez un OID ou un nom d\'objet MIB.')) ?>);
+				this.message(panel, <?= json_encode(I18n::t('Enter an OID or a MIB object name.')) ?>);
 
 				return;
 			}
@@ -385,7 +394,7 @@
 			this.showTab('results');
 
 			if (this.host === null || this.$('mibb-interface').value === '') {
-				this.message(panel, <?= json_encode(_('Choisissez d\'abord un hôte avec une interface SNMP.')) ?>);
+				this.message(panel, <?= json_encode(I18n::t('First choose a host with an SNMP interface.')) ?>);
 
 				return;
 			}
@@ -394,7 +403,7 @@
 
 			panel.innerHTML = '';
 			panel.append(this.el('div', {class: 'mibb-loading',
-				text: <?= json_encode(_('Test de la connexion SNMP')) ?> + ' — ' + (iface ? iface.label : '') + ' …'
+				text: <?= json_encode(I18n::t('Testing the SNMP connection')) ?> + ' — ' + (iface ? iface.label : '') + ' …'
 			}));
 
 			this.setBusy(true);
@@ -415,8 +424,8 @@
 			}
 
 			const via = result.proxy
-				? <?= json_encode(_('via le proxy')) ?> + ' ' + result.proxy
-				: <?= json_encode(_('via le serveur Zabbix')) ?>;
+				? this.fmt(<?= json_encode(I18n::t('via proxy %1$s')) ?>, result.proxy)
+				: <?= json_encode(I18n::t('via Zabbix server')) ?>;
 			const meta = [this.host.name, iface ? iface.label : '', via, result.duration + ' s'].filter((v) => v !== '');
 
 			const card = this.el('div', {class: 'mibb-test ' + (result.ok ? 'mibb-test-ok' : 'mibb-test-ko')},
@@ -424,7 +433,7 @@
 					this.el('span', {class: 'mibb-test-icon', text: result.ok ? '✔' : '✖'}),
 					this.el('div', {},
 						this.el('div', {class: 'mibb-test-title', text: result.ok
-							? <?= json_encode(_('Connexion SNMP réussie')) ?>
+							? <?= json_encode(I18n::t('SNMP connection successful')) ?>
 							: result.diagnosis.title
 						}),
 						this.el('div', {class: 'mibb-test-meta', text: meta.join(' — ')})
@@ -435,13 +444,13 @@
 
 			if (result.ok) {
 				const labels = {
-					name: <?= json_encode(_('Nom (sysName)')) ?>,
-					descr: <?= json_encode(_('Description (sysDescr)')) ?>,
-					vendor: <?= json_encode(_('Constructeur')) ?>,
-					object_id: <?= json_encode(_('Identifiant (sysObjectID)')) ?>,
-					uptime: <?= json_encode(_('Démarré depuis (sysUpTime)')) ?>,
-					location: <?= json_encode(_('Emplacement (sysLocation)')) ?>,
-					contact: <?= json_encode(_('Contact (sysContact)')) ?>
+					name: <?= json_encode(I18n::t('Name (sysName)')) ?>,
+					descr: <?= json_encode(I18n::t('Description (sysDescr)')) ?>,
+					vendor: <?= json_encode(I18n::t('Vendor')) ?>,
+					object_id: <?= json_encode(I18n::t('Identifier (sysObjectID)')) ?>,
+					uptime: <?= json_encode(I18n::t('Up since (sysUpTime)')) ?>,
+					location: <?= json_encode(I18n::t('Location (sysLocation)')) ?>,
+					contact: <?= json_encode(I18n::t('Contact (sysContact)')) ?>
 				};
 				const table = this.el('table', {class: 'mibb-details-table'});
 
@@ -486,10 +495,10 @@
 				result.diagnosis.actions.forEach((a) => actions.append(this.el('li', {text: a})));
 
 				card.append(
-					this.el('div', {class: 'mibb-test-section', text: <?= json_encode(_('Causes probables')) ?>}), causes,
-					this.el('div', {class: 'mibb-test-section', text: <?= json_encode(_('À vérifier')) ?>}), actions,
+					this.el('div', {class: 'mibb-test-section', text: <?= json_encode(I18n::t('Probable causes')) ?>}), causes,
+					this.el('div', {class: 'mibb-test-section', text: <?= json_encode(I18n::t('To check')) ?>}), actions,
 					this.el('details', {class: 'mibb-test-raw'},
-						this.el('summary', {text: <?= json_encode(_('Message d\'erreur détaillé')) ?>}),
+						this.el('summary', {text: <?= json_encode(I18n::t('Detailed error message')) ?>}),
 						this.el('pre', {class: 'mibb-mono', text: result.error})
 					)
 				);
@@ -520,13 +529,13 @@
 			const info = [
 				result.operation === 'walk' ? 'Walk' : 'Get',
 				' ', result.snmp_oid, ' — ',
-				result.total + ' ' + <?= json_encode(_('valeur(s)')) ?>,
+				this.fmt(<?= json_encode(I18n::t('%1$s value(s)')) ?>, result.total),
 				' — ' + result.duration + ' s',
 				this.host ? ' — ' + this.host.name + (this.host.proxy ? ' (proxy ' + this.host.proxy + ')' : '') : ''
 			].join('');
 
 			const filter = this.el('input', {type: 'text', class: 'mibb-filter',
-				placeholder: <?= json_encode(_('Filtrer les résultats')) ?>
+				placeholder: <?= json_encode(I18n::t('Filter results')) ?>
 			});
 
 			const header = this.el('div', {class: 'mibb-results-header'},
@@ -535,7 +544,7 @@
 				this.el('button', {type: 'button', class: 'btn-alt', text: 'CSV', onclick: () => this.exportCsv()}),
 				result.operation === 'walk' && result.rows.length
 					? this.el('button', {type: 'button', class: 'btn-alt',
-						text: <?= json_encode(_('Générer un modèle')) ?>,
+						text: <?= json_encode(I18n::t('Generate a template')) ?>,
 						onclick: () => this.openTemplateDialog([this.subtreeRoot(result.oid)])
 					})
 					: null
@@ -547,25 +556,25 @@
 				panel.append(this.el('div', {class: 'mibb-msg ' + (result.security.encrypted ? 'mibb-msg-info' : 'mibb-msg-warning')},
 					this.securityBadge(result.security), ' ',
 					result.security.summary + ' — ' + result.security.issues.join(' ')
-						+ (result.security.encrypted ? '' : ' ' + <?= json_encode(_('Configurez SNMPv3 authPriv (SHA-256 / AES) sur cet équipement et sur l\'interface de l\'hôte.')) ?>)
+						+ (result.security.encrypted ? '' : ' ' + <?= json_encode(I18n::t('Configure SNMPv3 authPriv (SHA-256 / AES) on this device and on the host interface.')) ?>)
 				));
 			}
 
 			if (result.limited) {
 				panel.append(this.el('div', {class: 'mibb-msg mibb-msg-warning',
-					text: <?= json_encode(_('Affichage limité aux premières valeurs (option max_results du module).')) ?>
+					text: <?= json_encode(I18n::t('Display limited to the first values (module option max_results).')) ?>
 				}));
 			}
 
 			if (result.truncated) {
 				panel.append(this.el('div', {class: 'mibb-msg mibb-msg-warning',
-					text: <?= json_encode(_('Le serveur Zabbix a tronqué la réponse : faites un walk sur un sous-arbre plus petit.')) ?>
+					text: <?= json_encode(I18n::t('Zabbix server truncated the response: walk a smaller subtree.')) ?>
 				}));
 			}
 
 			if (!result.rows.length) {
 				panel.append(this.el('div', {class: 'mibb-empty',
-					text: <?= json_encode(_('Aucune valeur (objet absent sur l\'équipement ou hors de la vue SNMP).')) ?>
+					text: <?= json_encode(I18n::t('No value (object absent on the device or outside the SNMP view).')) ?>
 				}));
 
 				return;
@@ -589,7 +598,7 @@
 					this.el('td', {},
 						row.node_oid
 							? this.el('a', {href: 'javascript:void(0)', class: 'mibb-mono', text: row.label,
-								title: <?= json_encode(_('Afficher dans l\'arbre')) ?>,
+								title: <?= json_encode(I18n::t('Show in tree')) ?>,
 								onclick: () => this.revealInTree(row.node_oid)
 							})
 							: this.el('span', {class: 'mibb-mono mibb-unknown', text: row.label})
@@ -598,7 +607,7 @@
 					this.el('td', {class: 'mibb-value', text: row.value}),
 					this.el('td', {class: 'mibb-actions'},
 						row.can_create_item
-							? this.el('button', {type: 'button', class: 'btn-link', text: <?= json_encode(_('+ Élément')) ?>,
+							? this.el('button', {type: 'button', class: 'btn-link', text: <?= json_encode(I18n::t('+ Item')) ?>,
 								onclick: () => this.openItemDialog(row)
 							})
 							: null
@@ -868,7 +877,7 @@
 			box.style.display = '';
 
 			if (!result.results || !result.results.length) {
-				box.append(this.el('div', {class: 'mibb-search-empty', text: <?= json_encode(_('Aucun résultat')) ?>}));
+				box.append(this.el('div', {class: 'mibb-search-empty', text: <?= json_encode(I18n::t('No results')) ?>}));
 
 				return;
 			}
@@ -894,17 +903,17 @@
 				[<?= json_encode(_('Name')) ?>, node.label ?? node.name],
 				['OID', node.oid],
 				[<?= json_encode(_('Type')) ?>, this.KIND_LABELS[node.kind] ?? node.kind],
-				[<?= json_encode(_('Syntaxe')) ?>, node.syntax && node.syntax !== node.base_type
+				[<?= json_encode(I18n::t('Syntax')) ?>, node.syntax && node.syntax !== node.base_type
 					? node.syntax + ' (' + node.base_type + ')'
 					: node.syntax],
-				[<?= json_encode(_('Accès')) ?>, node.access],
+				[<?= json_encode(I18n::t('Access')) ?>, node.access],
 				[<?= json_encode(_('Status')) ?>, node.status],
 				[<?= json_encode(_('Units')) ?>, node.units],
-				[<?= json_encode(_('Index')) ?>, node.index ? node.index.join(', ')
+				[<?= json_encode(I18n::t('Index')) ?>, node.index ? node.index.join(', ')
 					+ (node.index_from ? ' (' + <?= json_encode(_('via')) ?> + ' ' + node.index_from + ')' : '')
 					: null],
 				['Display hint', node.display_hint],
-				[<?= json_encode(_('Objets')) ?>, node.objects ? node.objects.join(', ') : null]
+				[<?= json_encode(I18n::t('Objects')) ?>, node.objects ? node.objects.join(', ') : null]
 			];
 
 			const table = this.el('table', {class: 'mibb-details-table'});
@@ -927,7 +936,7 @@
 					list.append(this.el('span', {class: 'mibb-enum-item', text: label + ' (' + value + ')'}));
 				}
 
-				table.append(this.el('tr', {}, this.el('th', {text: <?= json_encode(_('Valeurs')) ?>}),
+				table.append(this.el('tr', {}, this.el('th', {text: <?= json_encode(I18n::t('Values')) ?>}),
 					this.el('td', {}, list)
 				));
 			}
@@ -940,12 +949,12 @@
 					onclick: () => this.runQuery('walk', node.label ?? node.oid)
 				}),
 				node.can_template
-					? this.el('button', {type: 'button', class: 'btn-alt', text: <?= json_encode(_('Générer un modèle')) ?>,
+					? this.el('button', {type: 'button', class: 'btn-alt', text: <?= json_encode(I18n::t('Generate a template')) ?>,
 						onclick: () => this.openTemplateDialog([node.oid], node)
 					})
 					: null,
 				node.kind === 'scalar' && node.can_create_item
-					? this.el('button', {type: 'button', class: 'btn-alt', text: <?= json_encode(_('Créer un élément')) ?>,
+					? this.el('button', {type: 'button', class: 'btn-alt', text: <?= json_encode(I18n::t('Create item')) ?>,
 						onclick: () => this.openItemDialog({
 							oid: node.oid + '.0', node_oid: node.oid, index: '0', label: node.label + '.0'
 						})
@@ -957,7 +966,7 @@
 
 			if (node.kind === 'column' && node.can_create_item) {
 				panel.append(this.el('div', {class: 'mibb-hint',
-					text: <?= json_encode(_('Pour créer un élément sur une colonne, faites un Walk puis choisissez l\'instance (« + Élément ») dans les résultats, ou générez un modèle avec découverte.')) ?>
+					text: <?= json_encode(I18n::t('To create an item on a column, run a Walk then choose the instance ("+ Item") in the results, or generate a template with discovery.')) ?>
 				}));
 			}
 
@@ -993,9 +1002,9 @@
 				const status = this.el('div', {class: 'mibb-upload-status'});
 
 				panel.append(this.el('div', {class: 'mibb-upload'},
-					this.el('label', {for: 'mibb-upload-input', text: <?= json_encode(_('Ajouter des fichiers MIB :')) ?>}),
+					this.el('label', {for: 'mibb-upload-input', text: <?= json_encode(I18n::t('Add MIB files:')) ?>}),
 					input,
-					this.el('button', {type: 'button', text: <?= json_encode(_('Téléverser')) ?>,
+					this.el('button', {type: 'button', text: <?= json_encode(I18n::t('Upload')) ?>,
 						onclick: () => this.uploadMibs(input, status)
 					}),
 					status
@@ -1003,13 +1012,13 @@
 			}
 			else {
 				panel.append(this.el('div', {class: 'mibb-hint',
-					text: <?= json_encode(_('Seul un Super administrateur peut ajouter ou supprimer des MIB.')) ?>
+					text: <?= json_encode(I18n::t('Only a Super admin can add or delete MIBs.')) ?>
 				}));
 			}
 
 			if (result.storage_problems && result.storage_problems.length) {
 				panel.append(this.el('div', {class: 'mibb-msg mibb-msg-warning',
-					text: <?= json_encode(_('Dossier non accessible en écriture : ')) ?> + result.storage_problems.join(', ')
+					text: this.fmt(<?= json_encode(I18n::t('Directory not writable: %1$s')) ?>, result.storage_problems.join(', '))
 				}));
 			}
 
@@ -1025,15 +1034,15 @@
 							: module.name
 					),
 					this.el('td', {class: 'mibb-mono', text: module.file}),
-					this.el('td', {text: module.source === 'user' ? <?= json_encode(_('Ajoutée')) ?> : <?= json_encode(_('Standard')) ?>}),
+					this.el('td', {text: module.source === 'user' ? <?= json_encode(I18n::t('Added')) ?> : <?= json_encode(I18n::t('Standard')) ?>}),
 					this.el('td', {text: module.objects}),
 					this.el('td', {class: module.missing.length ? 'mibb-warn-text' : '',
 						text: module.missing.length
-							? <?= json_encode(_('Dépendances manquantes : ')) ?> + module.missing.join(', ')
-							: (module.unresolved ? module.unresolved + ' ' + <?= json_encode(_('objet(s) non résolu(s)')) ?> : 'OK')
+							? this.fmt(<?= json_encode(I18n::t('Missing dependencies: %1$s')) ?>, module.missing.join(', '))
+							: (module.unresolved ? this.fmt(<?= json_encode(I18n::t('%1$s unresolved object(s)')) ?>, module.unresolved) : 'OK')
 					}),
 					this.el('td', {class: 'mibb-actions'},
-						this.el('button', {type: 'button', class: 'btn-link', text: <?= json_encode(_('Modèle')) ?>,
+						this.el('button', {type: 'button', class: 'btn-link', text: <?= json_encode(I18n::t('Template')) ?>,
 							onclick: () => this.openTemplateDialog(['module:' + module.name], {name: module.name, module: module.name})
 						}),
 						this.is_super_admin && module.source === 'user'
@@ -1048,10 +1057,10 @@
 			panel.append(this.el('table', {class: 'list-table'},
 				this.el('thead', {}, this.el('tr', {},
 					this.el('th', {text: <?= json_encode(_('Module')) ?>}),
-					this.el('th', {text: <?= json_encode(_('Fichier')) ?>}),
+					this.el('th', {text: <?= json_encode(I18n::t('File')) ?>}),
 					this.el('th', {text: <?= json_encode(_('Source')) ?>}),
-					this.el('th', {text: <?= json_encode(_('Objets')) ?>}),
-					this.el('th', {text: <?= json_encode(_('État')) ?>}),
+					this.el('th', {text: <?= json_encode(I18n::t('Objects')) ?>}),
+					this.el('th', {text: <?= json_encode(I18n::t('State')) ?>}),
 					this.el('th', {text: ''})
 				)),
 				tbody
@@ -1087,13 +1096,13 @@
 
 			// Policy.
 			const policy = this.el('div', {class: 'mibb-policy'},
-				this.el('b', {text: <?= json_encode(_('Politique du module : ')) ?>})
+				this.el('b', {text: <?= json_encode(I18n::t('Module policy:')) ?>})
 			);
 
 			if (result.can_edit) {
 				const select = this.el('select', {class: 'mibb-select', id: 'mibb-policy-select'},
-					this.el('option', {value: 'warn', text: <?= json_encode(_('Avertir pour les interfaces non chiffrées')) ?>}),
-					this.el('option', {value: 'require_encryption', text: <?= json_encode(_('Exiger SNMPv3 chiffré (authPriv)')) ?>})
+					this.el('option', {value: 'warn', text: <?= json_encode(I18n::t('Warn for unencrypted interfaces')) ?>}),
+					this.el('option', {value: 'require_encryption', text: <?= json_encode(I18n::t('Require encrypted SNMPv3 (authPriv)')) ?>})
 				);
 				const status = this.el('span', {class: 'mibb-policy-status'});
 
@@ -1112,7 +1121,7 @@
 							this.policy = saved.policy;
 							this.updateSecurityBadge();
 							status.innerHTML = '';
-							status.append(this.el('span', {class: 'mibb-ok-text', text: <?= json_encode(_('Enregistré.')) ?>}));
+							status.append(this.el('span', {class: 'mibb-ok-text', text: <?= json_encode(I18n::t('Saved.')) ?>}));
 						}
 					}),
 					status
@@ -1120,19 +1129,19 @@
 			}
 			else {
 				policy.append(this.el('span', {text: result.policy === 'require_encryption'
-					? <?= json_encode(_('SNMPv3 chiffré exigé')) ?>
-					: <?= json_encode(_('avertissement')) ?>
+					? <?= json_encode(I18n::t('Encrypted SNMPv3 required')) ?>
+					: <?= json_encode(I18n::t('warning')) ?>
 				}));
 			}
 
 			policy.append(this.el('div', {class: 'mibb-hint',
-				text: <?= json_encode(_('« Exiger » refuse les requêtes Get/Walk du module sur les interfaces SNMPv1, SNMPv2c et SNMPv3 sans chiffrement. La collecte normale de Zabbix n\'est pas modifiée.')) ?>
+				text: <?= json_encode(I18n::t('"Require" denies the module Get/Walk requests on SNMPv1, SNMPv2c and unencrypted SNMPv3 interfaces. Normal Zabbix data collection is not affected.')) ?>
 			}));
 
 			panel.append(policy);
 
 			if (!result.rows.length) {
-				panel.append(this.el('div', {class: 'mibb-empty', text: <?= json_encode(_('Aucune interface SNMP.')) ?>}));
+				panel.append(this.el('div', {class: 'mibb-empty', text: <?= json_encode(I18n::t('No SNMP interface.')) ?>}));
 
 				return;
 			}
@@ -1146,7 +1155,7 @@
 						this.el('a', {href: 'zabbix.php?action=popup&popup=host.edit&hostid=' + encodeURIComponent(row.hostid),
 							target: '_blank', text: row.host
 						}),
-						row.enabled ? null : this.el('span', {class: 'mibb-unknown', text: ' (' + <?= json_encode(_('désactivé')) ?> + ')'})
+						row.enabled ? null : this.el('span', {class: 'mibb-unknown', text: ' (' + <?= json_encode(I18n::t('disabled')) ?> + ')'})
 					),
 					this.el('td', {class: 'mibb-mono', text: row.address}),
 					this.el('td', {text: row.summary}),
@@ -1156,17 +1165,17 @@
 
 			panel.append(this.el('table', {class: 'list-table'},
 				this.el('thead', {}, this.el('tr', {},
-					this.el('th', {text: <?= json_encode(_('Sécurité')) ?>}),
+					this.el('th', {text: <?= json_encode(I18n::t('Security')) ?>}),
 					this.el('th', {text: <?= json_encode(_('Host')) ?>}),
 					this.el('th', {text: <?= json_encode(_('Interface')) ?>}),
 					this.el('th', {text: <?= json_encode(_('Configuration')) ?>}),
-					this.el('th', {text: <?= json_encode(_('À corriger')) ?>})
+					this.el('th', {text: <?= json_encode(I18n::t('To fix')) ?>})
 				)),
 				tbody
 			));
 
 			if (result.limited) {
-				panel.append(this.el('div', {class: 'mibb-hint', text: <?= json_encode(_('Liste limitée aux 5000 premières interfaces.')) ?>}));
+				panel.append(this.el('div', {class: 'mibb-hint', text: <?= json_encode(I18n::t('List limited to the first 5000 interfaces.')) ?>}));
 			}
 		}
 
@@ -1177,13 +1186,13 @@
 
 			for (const file of input.files) {
 				if (file.size > this.max_upload_size) {
-					this.message(status, file.name + ' : ' + <?= json_encode(_('fichier trop volumineux.')) ?>);
+					this.message(status, this.fmt(<?= json_encode(I18n::t('%1$s: file too large.')) ?>, file.name));
 
 					return;
 				}
 			}
 
-			this.message(status, <?= json_encode(_('Téléversement…')) ?>, 'info');
+			this.message(status, <?= json_encode(I18n::t('Uploading…')) ?>, 'info');
 
 			const result = await this.request('mibbrowser.mib.upload', {}, input.files);
 
@@ -1195,7 +1204,7 @@
 
 			const lines = result.results.map((r) => r.error
 				? r.file + ' : ' + r.error
-				: r.file + ' : ' + r.modules.join(', ') + ' (' + r.objects + ' ' + <?= json_encode(_('objets')) ?> + ')'
+				: this.fmt(<?= json_encode(I18n::t('%1$s: %2$s (%3$s objects)')) ?>, r.file, r.modules.join(', '), r.objects)
 			);
 
 			this.mibs_loaded = false;
@@ -1210,7 +1219,7 @@
 		}
 
 		async deleteMib(name) {
-			if (!confirm(<?= json_encode(_('Supprimer la MIB')) ?> + ' ' + name + ' ?')) {
+			if (!confirm(this.fmt(<?= json_encode(I18n::t('Delete MIB %1$s?')) ?>, name))) {
 				return;
 			}
 
@@ -1290,7 +1299,7 @@
 			const host_label = this.$('mibb-item-target-host-label');
 			const has_host = this.host !== null;
 
-			host_label.textContent = has_host ? <?= json_encode(_('Hôte')) ?> + ' ' + this.host.name : <?= json_encode(_('Hôte (aucun sélectionné)')) ?>;
+			host_label.textContent = has_host ? this.fmt(<?= json_encode(I18n::t('Host %1$s')) ?>, this.host.name) : <?= json_encode(I18n::t('Host (none selected)')) ?>;
 			this.$('mibb-item-target-host').disabled = !has_host;
 			this.$('mibb-item-target-host').checked = has_host;
 			this.$('mibb-item-target-template').checked = !has_host;
@@ -1309,7 +1318,7 @@
 				const data = jQuery('#mibb_item_templateid').multiSelect('getData');
 
 				if (!data.length) {
-					this.message(message, <?= json_encode(_('Choisissez un modèle.')) ?>);
+					this.message(message, <?= json_encode(I18n::t('Choose a template.')) ?>);
 
 					return;
 				}
@@ -1347,7 +1356,7 @@
 			message.innerHTML = '';
 			message.append(this.el('div', {class: 'mibb-msg mibb-msg-success'},
 				result.message + ' ',
-				this.el('a', {href: result.url, target: '_blank', text: <?= json_encode(_('Voir les éléments')) ?>})
+				this.el('a', {href: result.url, target: '_blank', text: <?= json_encode(I18n::t('View items')) ?>})
 			));
 		}
 
@@ -1367,7 +1376,7 @@
 			const base = node ? (node.name === node.module ? node.module : node.name) : 'SNMP device';
 
 			this.template_roots = roots;
-			this.$('mibb-tpl-roots').textContent = <?= json_encode(_('Source : ')) ?> + label;
+			this.$('mibb-tpl-roots').textContent = this.fmt(<?= json_encode(I18n::t('Source: %1$s')) ?>, label);
 			this.$('mibb-tpl-name').value = base + ' by SNMP';
 			this.$('mibb-tpl-preview').innerHTML = '';
 			this.$('mibb-tpl-message').innerHTML = '';
@@ -1377,8 +1386,8 @@
 			this.$('mibb-tpl-link').disabled = !has_host;
 			this.$('mibb-tpl-link').checked = false;
 			this.$('mibb-tpl-link-label').textContent = has_host
-				? <?= json_encode(_('Lier le modèle à l\'hôte')) ?> + ' ' + this.host.name + ' ' + <?= json_encode(_('après l\'import')) ?>
-				: <?= json_encode(_('Lier le modèle à un hôte (sélectionnez d\'abord un hôte)')) ?>;
+				? this.fmt(<?= json_encode(I18n::t('Link the template to host %1$s after import')) ?>, this.host.name)
+				: <?= json_encode(I18n::t('Link the template to a host (select a host first)')) ?>;
 
 			this.openDialog(dialog);
 			this.$('mibb-tpl-name').focus();
@@ -1403,7 +1412,7 @@
 				params.link_hostid = this.host.hostid;
 			}
 
-			this.message(message, <?= json_encode(_('Génération…')) ?>, 'info');
+			this.message(message, <?= json_encode(I18n::t('Generating…')) ?>, 'info');
 
 			const result = await this.request('mibbrowser.template.generate', params);
 
@@ -1417,13 +1426,13 @@
 
 			if (mode === 'yaml') {
 				this.download(result.filename, result.content, result.mime);
-				this.message(message, <?= json_encode(_('Fichier téléchargé : ')) ?> + result.filename, 'success');
+				this.message(message, this.fmt(<?= json_encode(I18n::t('File downloaded: %1$s')) ?>, result.filename), 'success');
 			}
 			else if (mode === 'import') {
 				message.innerHTML = '';
 				message.append(this.el('div', {class: 'mibb-msg mibb-msg-success'},
 					result.message + ' ',
-					this.el('a', {href: result.url, target: '_blank', text: <?= json_encode(_('Ouvrir le modèle')) ?>})
+					this.el('a', {href: result.url, target: '_blank', text: <?= json_encode(I18n::t('Open template')) ?>})
 				));
 			}
 			else {
@@ -1436,10 +1445,9 @@
 			box.innerHTML = '';
 
 			box.append(this.el('div', {class: 'mibb-tpl-counts', text:
-				summary.items.length + ' ' + <?= json_encode(_('élément(s)')) ?> + ', '
-				+ summary.discovery_rules.length + ' ' + <?= json_encode(_('règle(s) de découverte')) ?> + ', '
-				+ summary.prototype_count + ' ' + <?= json_encode(_('prototype(s)')) ?> + ', '
-				+ summary.valuemaps + ' ' + <?= json_encode(_('table(s) de correspondance')) ?>
+				this.fmt(<?= json_encode(I18n::t('%1$s item(s), %2$s discovery rule(s), %3$s prototype(s), %4$s value map(s)')) ?>,
+					summary.items.length, summary.discovery_rules.length, summary.prototype_count, summary.valuemaps
+				)
 			}));
 
 			const list = this.el('ul', {class: 'mibb-tpl-list'});

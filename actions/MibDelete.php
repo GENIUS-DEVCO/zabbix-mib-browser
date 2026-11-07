@@ -6,6 +6,8 @@
 
 namespace Modules\MibBrowser\Actions;
 
+use Modules\MibBrowser\Lib\I18n;
+
 use Modules\MibBrowser\Lib\MibRepository,
 	Modules\MibBrowser\Lib\Storage;
 
@@ -22,7 +24,7 @@ class MibDelete extends BaseJson {
 		$name = $this->getInput('module');
 
 		if (!array_key_exists($name, $modules) || $modules[$name]['source'] !== MibRepository::SOURCE_USER) {
-			$this->respondError(_('Seules les MIB ajoutées par un utilisateur peuvent être supprimées.'));
+			$this->respondError(I18n::t('Only MIBs added by a user can be deleted.'));
 
 			return;
 		}
@@ -30,7 +32,7 @@ class MibDelete extends BaseJson {
 		$path = Storage::userMibDir().'/'.basename($modules[$name]['file']);
 
 		if (!is_file($path) || !@unlink($path)) {
-			$this->respondError(_('Suppression impossible.'));
+			$this->respondError(I18n::t('Cannot delete the file.'));
 
 			return;
 		}

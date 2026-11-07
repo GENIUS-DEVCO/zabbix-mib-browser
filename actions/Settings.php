@@ -7,6 +7,8 @@
 
 namespace Modules\MibBrowser\Actions;
 
+use Modules\MibBrowser\Lib\I18n;
+
 use APP,
 	Modules\MibBrowser\Lib\SnmpSecurity;
 
@@ -24,7 +26,7 @@ class Settings extends BaseJson {
 		$module = APP::ModuleManager()->getModule('mibbrowser');
 
 		if ($module === null) {
-			$this->respondError(_('Module introuvable.'));
+			$this->respondError(I18n::t('Module not found.'));
 
 			return;
 		}
@@ -37,7 +39,7 @@ class Settings extends BaseJson {
 		$errors = array_filter(get_and_clear_messages(), static fn($m) => $m['type'] === 'error');
 
 		if ($errors) {
-			$this->respondError(_('Impossible d\'enregistrer les paramètres du module.'));
+			$this->respondError(I18n::t('Cannot save the module settings.'));
 
 			return;
 		}

@@ -17,11 +17,12 @@ function _s($format, ...$args) {
 
 $root = dirname(__DIR__);
 
-foreach (['MibParser', 'MibRepository', 'SnmpResult', 'ItemMapper', 'TemplateBuilder', 'YamlWriter', 'SnmpSecurity', 'ConnectionDiagnosis'] as $class) {
+foreach (['I18n', 'MibParser', 'MibRepository', 'SnmpResult', 'ItemMapper', 'TemplateBuilder', 'YamlWriter', 'SnmpSecurity', 'ConnectionDiagnosis'] as $class) {
 	require $root.'/lib/'.$class.'.php';
 }
 
 use Modules\MibBrowser\Lib\ConnectionDiagnosis,
+	Modules\MibBrowser\Lib\I18n,
 	Modules\MibBrowser\Lib\ItemMapper,
 	Modules\MibBrowser\Lib\MibParser,
 	Modules\MibBrowser\Lib\MibRepository,
@@ -29,6 +30,9 @@ use Modules\MibBrowser\Lib\ConnectionDiagnosis,
 	Modules\MibBrowser\Lib\SnmpSecurity,
 	Modules\MibBrowser\Lib\TemplateBuilder,
 	Modules\MibBrowser\Lib\YamlWriter;
+
+// The expectations below are written for the French catalog; English and the other catalogs are checked at the end.
+I18n::setLocale('fr_FR');
 
 $failures = 0;
 $count = 0;
@@ -367,6 +371,81 @@ array_map('unlink', glob($user_dir.'/*'));
 @rmdir($user_dir);
 array_map('unlink', glob($cache.'/*'));
 @rmdir($cache);
+
+// --- Translations ---------------------------------------------------------------------------------------------------
+
+I18n::setLocale('en_US');
+check('i18n: English source', SnmpResult::format(['type' => '', 'raw' => '8640123'], $repository->getNode('1.3.6.1.2.1.1.3'))['value'],
+	'1d 00:00:01.23 (8640123)'
+);
+I18n::setLocale('en_GB');
+check('i18n: locale without catalog falls back to English', I18n::t('Test connection'), 'Test connection');
+I18n::setLocale('de_DE');
+check('i18n: German', I18n::t('Test connection'), 'Verbindung testen');
+I18n::setLocale('pt_BR');
+check('i18n: exact locale file first (pt_BR)', is_file($root.'/lang/pt_BR.php') && I18n::t('Results') !== 'Results', true);
+I18n::setLocale('zz_ZZ');
+check('i18n: unknown locale', I18n::s('Source: %1$s', 'x'), 'Source: x');
+
+// Every module text (I18n::t / I18n::s literal) is in every catalog, with the same placeholders.
+$keys = [];
+$files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS));
+
+foreach ($files as $file) {
+	$file = (string) $file;
+
+	if (substr($file, -4) !== '.php' || preg_match('#[/\\\\](\.git|tests|lang)[/\\\\]#', $file)) {
+		continue;
+	}
+
+	$tokens = token_get_all(file_get_contents($file));
+
+	for ($i = 0, $n = count($tokens) - 4; $i < $n; $i++) {
+		if (!is_array($tokens[$i]) || $tokens[$i][1] !== 'I18n' || !is_array($tokens[$i + 1])
+				|| $tokens[$i + 1][0] !== T_DOUBLE_COLON || !in_array($tokens[$i + 2][1] ?? '', ['t', 's'], true)) {
+			continue;
+		}
+
+		for ($j = $i + 3; is_array($tokens[$j]) && $tokens[$j][0] === T_WHITESPACE; $j++);
+
+		if ($tokens[$j] !== '(') {
+			continue;
+		}
+
+		for ($j++; is_array($tokens[$j]) && $tokens[$j][0] === T_WHITESPACE; $j++);
+
+		if (is_array($tokens[$j]) && $tokens[$j][0] === T_CONSTANT_ENCAPSED_STRING) {
+			$keys[stripcslashes(substr($tokens[$j][1], 1, -1))] = true;
+		}
+	}
+}
+
+check('i18n: module texts found', count($keys) > 200, true);
+
+$placeholders = static function (string $text): array {
+	preg_match_all('/%\d+\$s/', $text, $m);
+	$m = array_unique($m[0]);
+	sort($m);
+
+	return $m;
+};
+
+foreach (glob($root.'/lang/*.php') as $file) {
+	$catalog = include $file;
+	$name = basename($file, '.php');
+	$missing = array_keys(array_diff_key($keys, $catalog));
+	$broken = [];
+
+	foreach ($catalog as $source => $translation) {
+		if (!is_string($translation) || $translation === '' || $placeholders($source) !== $placeholders($translation)) {
+			$broken[] = $source;
+		}
+	}
+
+	check('i18n: '.$name.' complete', [$missing, $broken], [[], []]);
+}
+
+check('i18n: all Zabbix languages', count(glob($root.'/lang/*.php')), 23);
 
 echo ($failures ? "\n$failures/$count tests FAILED\n" : "$count tests passed\n");
 exit($failures ? 1 : 0);

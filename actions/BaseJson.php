@@ -6,6 +6,8 @@
 
 namespace Modules\MibBrowser\Actions;
 
+use Modules\MibBrowser\Lib\I18n;
+
 use CController,
 	CControllerResponseData;
 
@@ -29,7 +31,7 @@ abstract class BaseJson extends CController {
 		$ret = $this->validateInput($rules);
 
 		if (!$ret) {
-			$this->respondError(_('Invalid input parameters.'));
+			$this->respondError(I18n::t('Invalid input parameters.'));
 		}
 
 		return $ret;

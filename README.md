@@ -23,6 +23,7 @@ Le module ajoute un écran **Data collection → MIB browser** qui permet :
 | **Création d'élément** | Élément SNMP `get[OID]` avec type d'information, unités, prétraitement (« Change per second » pour les compteurs, multiplicateur pour les TimeTicks) et **table de correspondance** créée depuis l'énumération MIB. |
 | **Génération de modèle** | Même approche que les modèles officiels Zabbix 8.0 : `get[]` pour les scalaires ; pour chaque table un élément maître `walk[]`, une **découverte LLD** dépendante (« SNMP walk to JSON ») et des **prototypes** dépendants (« SNMP walk value »). UUID stables : réimporter met à jour le même modèle. |
 | **Sécurité SNMP** | L'interface **SNMPv3 chiffrée (authPriv)** est choisie par défaut ; un badge indique le niveau de sécurité de l'interface utilisée ; les requêtes en clair (SNMPv1/v2c, SNMPv3 sans chiffrement) sont signalées ; un onglet dresse l'état de tous les hôtes SNMP ; une politique peut **exiger le chiffrement**. |
+| **Langues** | L'interface du module suit la **langue du profil Zabbix** de l'utilisateur : les 25 langues proposées par Zabbix 8.0 sont prises en charge. |
 | **Gestion des MIB** | Ajout de fichiers par un Super administrateur, détection des **dépendances manquantes**, suppression des MIB ajoutées. |
 
 | Détails d'un objet | Création d'un élément |
@@ -38,6 +39,8 @@ Le module ajoute un écran **Data collection → MIB browser** qui permet :
 | ![Test OK](docs/screenshots/07-test-ok.png) | ![Test KO](docs/screenshots/08-test-ko.png) |
 
 ![Sécurité SNMP](docs/screenshots/06-security.png)
+
+![Interface en japonais](docs/screenshots/09-i18n-ja.png)
 
 ## Prérequis
 
@@ -136,6 +139,27 @@ Zabbix copie ces options dans sa base de données lors de l'activation du module
 
 Le délai d'une requête SNMP est celui défini dans Zabbix pour les agents SNMP (réglage global ou du proxy). Pour les très grands sous-arbres, faites un walk sur une partie plus petite : le serveur Zabbix tronque les réponses trop volumineuses et le module le signale.
 
+## Langues
+
+Le module s'affiche dans la langue choisie dans le profil Zabbix de l'utilisateur (*Profil utilisateur → Langue*), ou dans la langue par défaut du système si le profil est sur « Default ». Toutes les langues proposées par Zabbix 8.0 sont prises en charge :
+
+| Code | Langue | Code | Langue | Code | Langue |
+|---|---|---|---|---|---|
+| `en_GB`, `en_US` | Anglais | `he_IL` | Hébreu | `pl_PL` | Polonais |
+| `ca_ES` | Catalan | `it_IT` | Italien | `pt_BR` | Portugais (Brésil) |
+| `zh_CN` | Chinois simplifié | `ja_JP` | Japonais | `pt_PT` | Portugais (Portugal) |
+| `cs_CZ` | Tchèque | `ka_GE` | Géorgien | `ru_RU` | Russe |
+| `da_DK` | Danois | `ko_KR` | Coréen | `sk_SK` | Slovaque |
+| `de_DE` | Allemand | `lv_LV` | Letton | `es_ES` | Espagnol |
+| `fr_FR` | Français | `nb_NO` | Norvégien (bokmål) | `tr_TR` | Turc |
+| `uk_UA` | Ukrainien | `uz_UZ` | Ouzbek | `vi_VN` | Vietnamien |
+
+Les autres langues de Zabbix (non affichées par défaut dans son interface) utilisent l'anglais.
+
+Les textes sources sont en anglais dans le code (`I18n::t()`, `I18n::s()`), les traductions dans `lang/<langue>.php` sous forme de tableau `'texte anglais' => 'traduction'` (`lang/pt_BR.php` est prioritaire sur `lang/pt.php`). Un texte absent ou vide reste en anglais. Les libellés que Zabbix traduit déjà (Hôte, Nom, Enregistrer…) utilisent ses propres traductions.
+
+**Corriger ou améliorer une traduction** : modifiez le fichier `lang/` correspondant, gardez les paramètres `%1$s`, `%2$s`… et les termes techniques (`authPriv`, `walk[]`, `{$SNMP_COMMUNITY}`…), puis lancez `php tests/run.php` : un test vérifie que chaque langue contient tous les textes avec les mêmes paramètres. Les traductions ont été produites avec l'aide d'une IA ; les corrections par des locuteurs natifs sont bienvenues.
+
 ## Fonctionnement
 
 ```
@@ -149,6 +173,7 @@ Navigateur ──► Module (PHP, interface Zabbix) ──► Serveur Zabbix ─
 - `lib/ZabbixSnmp.php` : requêtes via le serveur Zabbix, résolution des macros des identifiants, choix du proxy.
 - `lib/SnmpSecurity.php` : niveau de sécurité des interfaces (chiffrement SNMPv3, algorithmes) et politique.
 - `lib/ItemMapper.php`, `lib/TemplateBuilder.php`, `lib/YamlWriter.php` : correspondance MIB → éléments et génération des modèles.
+- `lib/I18n.php` et `lang/` : traductions de l'interface du module.
 
 ## MIB fournies
 
@@ -166,7 +191,7 @@ Le dossier `mibs/` contient 43 MIB standards (IETF et Net-SNMP) : SNMPv2, IF-MIB
 php tests/run.php
 ```
 
-Les tests couvrent l'analyse des MIB, la résolution des OID, la lecture des réponses `walk[]` (exemples réels du serveur Zabbix 8.0), la correspondance MIB → élément et la génération de modèles. Ils tournent automatiquement sur GitHub Actions (PHP 8.2, 8.3 et 8.4).
+Les tests couvrent l'analyse des MIB, la résolution des OID, la lecture des réponses `walk[]` (exemples réels du serveur Zabbix 8.0), la correspondance MIB → élément, la génération de modèles et la complétude des traductions. Ils tournent automatiquement sur GitHub Actions (PHP 8.2, 8.3 et 8.4).
 
 Le module a aussi été testé de bout en bout sur un Zabbix 8.0.0 compilé depuis les sources, avec un agent Net-SNMP en SNMPv2c et SNMPv3 (authPriv) : walk, création d'éléments, import de modèles et découverte LLD avec collecte des valeurs.
 

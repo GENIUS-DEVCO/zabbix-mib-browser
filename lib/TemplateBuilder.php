@@ -164,7 +164,7 @@ class TemplateBuilder {
 		}
 
 		if (!$items) {
-			$this->warnings[] = _('Aucun objet lisible (scalaire ou table) dans la sélection.');
+			$this->warnings[] = I18n::t('No readable object (scalar or table) in the selection.');
 		}
 
 		$description = trim($this->options['description']);
